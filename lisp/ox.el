@@ -3252,12 +3252,14 @@ locally for the subtree through node properties."
 			    (with-temp-buffer
 			      (org-insert-time-stamp (current-time)))))
 		       ((equal (car key) "TITLE")
-			(or (let ((visited-file
+			;; gr prefer buffer-name over file-name
+			(or (buffer-name (buffer-base-buffer))
+			 (let ((visited-file
 				   (buffer-file-name (buffer-base-buffer))))
 			      (and visited-file
 				   (file-name-sans-extension
 				    (file-name-nondirectory visited-file))))
-			    (buffer-name (buffer-base-buffer))))
+			    ))
 		       (t (cdr key)))))
 	(if subtreep (org-entry-put node (concat "EXPORT_" (car key)) val)
 	  (insert
