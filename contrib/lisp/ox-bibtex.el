@@ -89,8 +89,6 @@
 ;; Initialization
 
 (eval-when-compile (require 'cl))
-(let ((jump-fn (car (org-remove-if-not #'fboundp '(ebib obe-goto-citation)))))
-  (org-add-link-type "cite" jump-fn))
 
 ;;; Internal Functions
 
@@ -148,6 +146,27 @@ to `org-bibtex-citation-p' predicate."
     (let ((value (org-element-property :value citation)))
       (and (string-match "\\`\\\\cite{" value)
 	   (substring value (match-end 0) -1)))))
+
+
+;;; Follow cite: links
+
+(defun org-bibtex-file nil "Org-mode file of bibtex entries.")
+
+(defun org-bibtex-goto-citation (&optional citation)
+  "Visit a citation given its ID."
+  (interactive)
+  (let ((citation (or citation
+		      (org-icompleting-read "Citation: "
+					    (obe-citations)))))
+    (find-file (or org-bibtex-file
+		   (error "`org-bibtex-file' has not been configured")))
+    (goto-char (point-min))
+    (when (re-search-forward (format "  :CUSTOM_ID: %s" citation) nil t)
+      (outline-previous-visible-heading 1)
+      t)))
+
+(let ((jump-fn (car (org-remove-if-not #'fboundp '(ebib org-bibtex-goto-citation)))))
+  (org-add-link-type "cite" jump-fn))
 
 
 
@@ -212,7 +231,8 @@ Return new parse tree."
 	    (with-temp-buffer
 	      (cond
 	       ((org-export-derived-backend-p backend 'html)
-		(insert "<div id=\"bibliography\">\n<h2>References</h2>\n")
+		(insert (format "<div id=\"bibliography\">\n<h2>%s</h2>\n"
+				(org-export-translate "References" :html info)))
 		(insert-file-contents (concat file ".html"))
 		(insert "\n</div>"))
 	       ((org-export-derived-backend-p backend 'ascii)
@@ -222,7 +242,13 @@ Return new parse tree."
 					    "-o"
 					    (concat file ".txt")))
 		  (error "Executing pandoc failed"))
-		(insert "References\n==========\n\n")
+		(insert
+		 (format
+		  "%s\n==========\n\n"
+		  (org-export-translate
+		   "References"
+		   (intern (format ":%s" (plist-get info :ascii-charset)))
+		   info)))
 		(insert-file-contents (concat file ".txt"))
 		(goto-char (point-min))
 		(while (re-search-forward
@@ -243,7 +269,10 @@ Return new parse tree."
 (defun org-bibtex-merge-contiguous-citations (tree backend info)
   "Merge all contiguous citation in parse tree.
 As a side effect, this filter will also turn all \"cite\" links
-into \"\\cite{...}\" LaTeX fragments."
+into \"\\cite{...}\" LaTeX fragments and will extract options.
+Cite options are placed into square brackets at the beginning of
+the \"\\cite\" command for the LaTeX backend, and are removed for
+the HTML and ASCII backends."
   (when (org-export-derived-backend-p backend 'html 'latex 'ascii)
     (org-element-map tree '(link latex-fragment)
       (lambda (object)
@@ -251,7 +280,8 @@ into \"\\cite{...}\" LaTeX fragments."
 	  (let ((new-citation (list 'latex-fragment
 				    (list :value ""
 					  :post-blank (org-element-property
-						       :post-blank object)))))
+						       :post-blank object))))
+		option)
 	    ;; Insert NEW-CITATION right before OBJECT.
 	    (org-element-insert-before new-citation object)
 	    ;; Remove all subsequent contiguous citations from parse
@@ -266,6 +296,18 @@ into \"\\cite{...}\" LaTeX fragments."
 		  (push (org-bibtex-get-citation-key next) keys))
 		(org-element-extract-element object)
 		(setq object next))
+	      ;; Find any options in keys, e.g., "(Chapter 2)key" has
+	      ;; the option "Chapter 2".
+	      (setq keys
+		    (mapcar
+		     (lambda (k)
+		       (if (string-match "^(\\([^)]\+\\))\\(.*\\)" k)
+			   (progn
+			     (when (org-export-derived-backend-p backend 'latex)
+			       (setq option (format "[%s]" (match-string 1 k))))
+			     (match-string 2 k))
+			 k))
+		     keys))
 	      (org-element-extract-element object)
 	      ;; Eventually merge all keys within NEW-CITATION.  Also
 	      ;; ensure NEW-CITATION has the same :post-blank property
@@ -275,7 +317,8 @@ into \"\\cite{...}\" LaTeX fragments."
 	       :post-blank (org-element-property :post-blank object))
 	      (org-element-put-property
 	       new-citation
-	       :value (format "\\cite{%s}"
+	       :value (format "\\cite%s{%s}"
+			      (or option "")
 			      (mapconcat 'identity (nreverse keys) ",")))))))))
   tree)
 

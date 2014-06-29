@@ -56,8 +56,6 @@ This will typically be either 'python or 'python-mode."
   :package-version '(Org . "8.0")
   :type 'symbol)
 
-(defvar org-src-preserve-indentation)
-
 (defcustom org-babel-python-hline-to "None"
   "Replace hlines in incoming tables with this when translating to python."
   :group 'org-babel
@@ -82,6 +80,8 @@ This function is called by `org-babel-execute-src-block'."
 	 (return-val (when (and (eq result-type 'value) (not session))
 		       (cdr (assoc :return params))))
 	 (preamble (cdr (assoc :preamble params)))
+	 (org-babel-python-command
+	  (or (cdr (assoc :python params)) org-babel-python-command))
          (full-body
 	  (org-babel-expand-body:generic
 	   (concat body (if return-val (format "\nreturn %s" return-val) ""))

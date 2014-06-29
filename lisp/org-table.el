@@ -41,6 +41,8 @@
 (declare-function org-export-string-as "ox"
 		  (string backend &optional body-only ext-plist))
 (declare-function aa2u "ext:ascii-art-to-unicode" ())
+(declare-function calc-eval "calc" (str &optional separator &rest args))
+		  
 (defvar orgtbl-mode) ; defined below
 (defvar orgtbl-mode-menu) ; defined when orgtbl mode get initialized
 (defvar constants-unit-system)
@@ -238,7 +240,12 @@ t       accept as input and present for editing"
 (defcustom org-table-copy-increment t
   "Non-nil means increment when copying current field with \\[org-table-copy-down]."
   :group 'org-table-calculation
-  :type 'boolean)
+  :version "24.5"
+  :package-version '(Org . "8.3")
+  :type '(choice
+	  (const :tag "Use the difference between the current and the above fields" t)
+	  (integer :tag "Use a number" 1)
+	  (const :tag "Don't increment the value when copying a field" nil)))
 
 (defcustom org-calc-default-modes
   '(calc-internal-prec 12
@@ -758,7 +765,7 @@ When nil, simply write \"#ERROR\" in corrupted fields.")
 	 (hfmt1 (concat
 		 (make-string sp2 ?-) "%s" (make-string sp1 ?-) "+"))
 	 emptystrings links dates emph raise narrow
-	 falign falign1 fmax f1 len c e space)
+	 falign falign1 fmax f1 f2 len c e space)
     (untabify beg end)
     (remove-text-properties beg end '(org-cwidth t org-dwidth t display t))
     ;; Check if we have links or dates
@@ -838,15 +845,25 @@ When nil, simply write \"#ERROR\" in corrupted fields.")
 			   (> (org-string-width xx) fmax))
 		  (org-add-props xx nil
 		    'help-echo
-		    (concat "Clipped table field, use C-c ` to edit.  Full value is:\n" (org-no-properties (copy-sequence xx))))
+		    (concat "Clipped table field, use C-c ` to edit.  Full value is:\n"
+			    (org-no-properties (copy-sequence xx))))
 		  (setq f1 (min fmax (or (string-match org-bracket-link-regexp xx) fmax)))
 		  (unless (> f1 1)
 		    (user-error "Cannot narrow field starting with wide link \"%s\""
 			   (match-string 0 xx)))
-		  (add-text-properties f1 (length xx) (list 'org-cwidth t) xx)
-		  (add-text-properties (- f1 2) f1
-				       (list 'display org-narrow-column-arrow)
-				       xx)))))
+		  (setq f2 (length xx))
+		  (if (= (org-string-width xx)
+			 f2)
+		      (setq f2 f1)
+		    (setq f2 1)
+		    (while (< (org-string-width (substring xx 0 f2))
+			      f1)
+		      (setq f2 (1+ f2))))
+		  (add-text-properties f2 (length xx) (list 'org-cwidth t) xx)
+		  (add-text-properties (if (>= (string-width (substring xx (1- f2) f2)) 2)
+					   (1- f2) (- f2 2)) f2
+					   (list 'display org-narrow-column-arrow)
+					   xx)))))
       ;; Get the maximum width for each column
       (push (apply 'max (or fmax 1) 1 (mapcar 'org-string-width column))
 	    lengths)
@@ -973,13 +990,16 @@ Optional argument NEW may specify text to replace the current field content."
 	    (progn
 	      (setq s (match-string 1)
 		    o (match-string 0)
-		    l (max 1 (- (match-end 0) (match-beginning 0) 3))
+		    l (max 1
+			   (- (org-string-width
+			       (buffer-substring-no-properties
+				(match-end 0) (match-beginning 0))) 3))
 		    e (not (= (match-beginning 2) (match-end 2))))
 	      (setq f (format (if num " %%%ds %s" " %%-%ds %s")
 			      l (if e "|" (setq org-table-may-need-update t) ""))
 		    n (format f s))
 	      (if new
-		  (if (<= (length new) l)      ;; FIXME: length -> str-width?
+		  (if (<= (org-string-width new) l)
 		      (setq n (format f new))
 		    (setq n (concat new "|") org-table-may-need-update t)))
 	      (if (equal (string-to-char n) ?-) (setq n (concat " " n)))
@@ -1099,30 +1119,36 @@ Before doing so, re-align the table if necessary."
 
 ;;;###autoload
 (defun org-table-copy-down (n)
-  "Copy a field down in the current column.
-If the field at the cursor is empty, copy into it the content of
-the nearest non-empty field above.  With argument N, use the Nth
-non-empty field.  If the current field is not empty, it is copied
-down to the next row, and the cursor is moved with it.
-Therefore, repeating this command causes the column to be filled
-row-by-row.
+  "Copy the value of the current field one row below.
+
+If the field at the cursor is empty, copy the content of the
+nearest non-empty field above.  With argument N, use the Nth
+non-empty field.
+
+If the current field is not empty, it is copied down to the next
+row, and the cursor is moved with it.  Therefore, repeating this
+command causes the column to be filled row-by-row.
+
 If the variable `org-table-copy-increment' is non-nil and the
 field is an integer or a timestamp, it will be incremented while
-copying.  In the case of a timestamp, increment by one day."
+copying.  By default, increment by the difference between the
+value in the current field and the one in the field above.  To
+increment using a fixed integer, set `org-table-copy-increment'
+to a number.  In the case of a timestamp, increment by days."
   (interactive "p")
   (let* ((colpos (org-table-current-column))
 	 (col (current-column))
 	 (field (save-excursion (org-table-get-field)))
+	 (field-up (or (save-excursion
+			 (org-table-get (1- (org-table-current-line))
+					(org-table-current-column))) ""))
 	 (non-empty (string-match "[^ \t]" field))
+	 (non-empty-up (string-match "[^ \t]" field-up))
 	 (beg (org-table-begin))
 	 (orig-n n)
-	 txt)
+	 txt txt-up inc)
     (org-table-check-inside-data-field)
-    (if non-empty
-	(progn
-	  (setq txt (org-trim field))
-	  (org-table-next-row)
-	  (org-table-blank-field))
+    (if (not non-empty)
       (save-excursion
 	(setq txt
 	      (catch 'exit
@@ -1133,22 +1159,49 @@ copying.  In the case of a timestamp, increment by one day."
 		  (if (and (looking-at
 			    "|[ \t]*\\([^| \t][^|]*?\\)[ \t]*|")
 			   (<= (setq n (1- n)) 0))
-		      (throw 'exit (match-string 1))))))))
-    (if txt
-	(progn
-	  (if (and org-table-copy-increment
-		   (not (equal orig-n 0))
-		   (string-match "^[0-9]+$" txt)
-		   (< (string-to-number txt) 100000000))
-	      (setq txt (format "%d" (+ (string-to-number txt) 1))))
-	  (insert txt)
-	  (org-move-to-column col)
-	  (if (and org-table-copy-increment (org-at-timestamp-p t))
-	      (org-timestamp-up-day)
-	    (org-table-maybe-recalculate-line))
-	  (org-table-align)
-	  (org-move-to-column col))
-      (user-error "No non-empty field found"))))
+		      (throw 'exit (match-string 1))))))
+	(setq field-up
+	      (catch 'exit
+		(while (progn (beginning-of-line 1)
+			      (re-search-backward org-table-dataline-regexp
+						  beg t))
+		  (org-table-goto-column colpos t)
+		  (if (and (looking-at
+			    "|[ \t]*\\([^| \t][^|]*?\\)[ \t]*|")
+			   (<= (setq n (1- n)) 0))
+		      (throw 'exit (match-string 1))))))
+	(setq non-empty-up (and field-up (string-match "[^ \t]" field-up))))
+      ;; Above field was not empty, go down to the next row
+      (setq txt (org-trim field))
+      (org-table-next-row)
+      (org-table-blank-field))
+    (if non-empty-up (setq txt-up (org-trim field-up)))
+    (setq inc (cond
+	       ((numberp org-table-copy-increment) org-table-copy-increment)
+	       (txt-up (cond ((and (string-match org-ts-regexp3 txt-up)
+				   (string-match org-ts-regexp3 txt))
+			      (- (org-time-string-to-absolute txt)
+				 (org-time-string-to-absolute txt-up)))
+			     ((string-match org-ts-regexp3 txt) 1)
+			     ((string-match "^[0-9]+\\(\.[0-9]+\\)?" txt-up)
+			      (- (string-to-number txt)
+				 (string-to-number (match-string 0 txt-up))))
+			     (t 1)))
+	       (t 1)))
+    (if (not txt)
+	(user-error "No non-empty field found")
+      (if (and org-table-copy-increment
+	       (not (equal orig-n 0))
+	       (string-match "^[-+^/*0-9eE.]+$" txt)
+	       (< (string-to-number txt) 100000000))
+	  (setq txt (calc-eval (concat txt "+" (number-to-string inc)))))
+      (insert txt)
+      (org-move-to-column col)
+      (if (and org-table-copy-increment (org-at-timestamp-p t))
+	  (org-timestamp-up-day inc)
+	(org-table-maybe-recalculate-line))
+      (org-table-align)
+      (org-move-to-column col))))
 
 (defun org-table-check-inside-data-field (&optional noerror)
   "Is point inside a table data field?
@@ -1642,7 +1695,8 @@ should be in the last line to be included into the sorting.
 
 The command then prompts for the sorting type which can be
 alphabetically, numerically, or by time (as given in a time stamp
-in the field).  Sorting in reverse order is also possible.
+in the field, or as a HH:MM value).  Sorting in reverse order is
+also possible.
 
 With prefix argument WITH-CASE, alphabetic sorting will be case-sensitive.
 
@@ -2728,7 +2782,8 @@ not overwrite the stored one."
 	  (or (fboundp 'calc-eval)
 	      (user-error "Calc does not seem to be installed, and is needed to evaluate the formula"))
 	  ;; Use <...> time-stamps so that Calc can handle them
-	  (setq form (replace-regexp-in-string org-ts-regexp3 "<\\1>" form))
+	  (while (string-match (concat "\\[" org-ts-regexp1 "\\]") form)
+	    (setq form (replace-match "<\\1>" nil nil form)))
 	  ;; I18n-ize local time-stamps by setting (system-time-locale "C")
 	  (when (string-match org-ts-regexp2 form)
 	    (let* ((ts (match-string 0 form))
@@ -3880,9 +3935,10 @@ With prefix ARG, apply the new formulas to the table."
 	(push org-table-current-begin-pos org-show-positions)
 	(let ((min (apply 'min org-show-positions))
 	      (max (apply 'max org-show-positions)))
-	  (goto-char min) (recenter 0)
+	  (set-window-start (selected-window) (point-min))
 	  (goto-char max)
-	  (or (pos-visible-in-window-p max) (recenter -1))))
+	  (or (pos-visible-in-window-p max)
+	      (set-window-start (selected-window) (point-max)))))
       (select-window win))))
 
 (defun org-table-force-dataline ()

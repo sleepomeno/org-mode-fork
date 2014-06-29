@@ -38,6 +38,7 @@
 (defvar org-src-lang-modes)
 (defvar org-babel-library-of-babel)
 (declare-function show-all "outline" ())
+(declare-function org-every "org" (pred seq))
 (declare-function org-remove-indentation "org" (code &optional n))
 (declare-function org-reduce "org" (CL-FUNC CL-SEQ &rest CL-KEYS))
 (declare-function org-mark-ring-push "org" (&optional pos buffer))
@@ -283,9 +284,15 @@ Returns a list
     ;; resolve variable references and add summary parameters
     (when (and info (not light))
       (setf (nth 2 info) (org-babel-process-params (nth 2 info))))
+    (when info
+      (setf (nth 2 info) (org-babel-generate-file-param name (nth 2 info))))
     (when info (append info (list name indent head)))))
 
-(defvar org-current-export-file) ; dynamically bound
+(defvar org-babel-exp-reference-buffer nil
+  "Buffer containing original contents of the exported buffer.
+This is used by Babel to resolve references in source blocks.
+Its value is dynamically bound during export.")
+
 (defmacro org-babel-check-confirm-evaluate (info &rest body)
   "Evaluate BODY with special execution confirmation variables set.
 
@@ -305,7 +312,7 @@ name of the code block."
 				 (when (assoc :noeval ,headers) "no")))
 	    (,eval-no        (or (equal ,eval "no")
 				 (equal ,eval "never")))
-	    (,export         (org-bound-and-true-p org-current-export-file))
+	    (,export         org-babel-exp-reference-buffer)
 	    (,eval-no-export (and ,export (or (equal ,eval "no-export")
 					      (equal ,eval "never-export"))))
 	    (noeval          (or ,eval-no ,eval-no-export))
@@ -563,11 +570,17 @@ block.  Otherwise the output is marked as literal by inserting
 colons at the starts of the lines.  This variable only takes
 effect if the :results output option is in effect.")
 
+(defvar org-babel-noweb-error-all-langs nil
+  "Raise errors when noweb references don't resolve.
+Also see `org-babel-noweb-error-langs' to control noweb errors on
+a language by language bases.")
+
 (defvar org-babel-noweb-error-langs nil
   "Languages for which Babel will raise literate programming errors.
 List of languages for which errors should be raised when the
 source code block satisfying a noweb reference in this language
-can not be resolved.")
+can not be resolved.  Also see `org-babel-noweb-error-all-langs'
+to raise errors for all languages.")
 
 (defvar org-babel-hash-show 4
   "Number of initial characters to show of a hidden results hash.")
@@ -581,7 +594,7 @@ can not be resolved.")
 (defun org-babel-named-src-block-regexp-for-name (name)
   "This generates a regexp used to match a src block named NAME."
   (concat org-babel-src-name-regexp (regexp-quote name)
-	  "[ \t(]*[\r\n]\\(?:^#.*[\r\n]\\)*"
+	  "[ \t(]*[\r\n]\\(?:^[[:space:]]*#.*[\r\n]\\)*"
 	  (substring org-babel-src-block-regexp 1)))
 
 (defun org-babel-named-data-regexp-for-name (name)
@@ -978,7 +991,7 @@ with a prefix argument then this is passed on to
 Return t if a code block was found at point, nil otherwise."
   `(let ((org-src-window-setup 'switch-invisibly))
      (when (and (org-babel-where-is-src-block-head)
-		(org-edit-src-code nil nil nil))
+		(org-edit-src-code))
        (unwind-protect (progn ,@body)
 	 (if (org-bound-and-true-p org-edit-src-from-org-mode)
 	     (org-edit-src-exit)))
@@ -1423,7 +1436,7 @@ specified in the properties of the current outline entry."
 	  (org-entry-get org-babel-current-src-block-location
 			 (concat "header-args:" lang) 'inherit))))))
 
-(defvar org-src-preserve-indentation)
+(defvar org-src-preserve-indentation) ;; declare defcustom from org-src
 (defun org-babel-parse-src-block-match ()
   "Parse the results from a match of the `org-babel-src-block-regexp'."
   (let* ((block-indentation (length (match-string 1)))
@@ -1587,7 +1600,7 @@ shown below.
 ;; row and column names
 (defun org-babel-del-hlines (table)
   "Remove all 'hlines from TABLE."
-  (remove 'hline table))
+  (remq 'hline table))
 
 (defun org-babel-get-colnames (table)
   "Return the column names of TABLE.
@@ -1852,10 +1865,13 @@ split.  When called from outside of a code block a new code block
 is created.  In both cases if the region is demarcated and if the
 region is not active then the point is demarcated."
   (interactive "P")
-  (let ((info (org-babel-get-src-block-info 'light))
-	(headers (progn (org-babel-where-is-src-block-head)
-			(match-string 4)))
-	(stars (concat (make-string (or (org-current-level) 1) ?*) " ")))
+  (let* ((info (org-babel-get-src-block-info 'light))
+	 (block (progn (org-babel-where-is-src-block-head) (match-string 0)))
+	 (headers (progn (org-babel-where-is-src-block-head) (match-string 4)))
+	 (stars (concat (make-string (or (org-current-level) 1) ?*) " "))
+	 lower-case-p)
+    (if (let (case-fold-search) (string-match "#\\+begin_src" block))
+	(setq lower-case-p t))
     (if info
         (mapc
          (lambda (place)
@@ -1869,9 +1885,10 @@ region is not active then the point is demarcated."
 		 (delete-region (point-at-bol) (point-at-eol)))
                (insert (concat
 			(if (looking-at "^") "" "\n")
-			indent "#+end_src\n"
+			indent (funcall (if lower-case-p 'downcase 'upcase) "#+end_src\n")
 			(if arg stars indent) "\n"
-			indent "#+begin_src " lang
+			indent (funcall (if lower-case-p 'downcase 'upcase) "#+begin_src ")
+			lang
 			(if (> (length headers) 1)
 			    (concat " " headers) headers)
 			(if (looking-at "[\n\r]")
@@ -1891,11 +1908,12 @@ region is not active then the point is demarcated."
 		   (if (org-region-active-p) (mark) (point)) (point))))
 	(insert (concat (if (looking-at "^") "" "\n")
 			(if arg (concat stars "\n") "")
-			"#+begin_src " lang "\n"
+			(funcall (if lower-case-p 'downcase 'upcase) "#+begin_src ")
+			lang "\n"
 			body
 			(if (or (= (length body) 0)
 				(string-match "[\r\n]$" body)) "" "\n")
-			"#+end_src\n"))
+			(funcall (if lower-case-p 'downcase 'upcase) "#+end_src\n")))
 	(goto-char start) (move-end-of-line 1)))))
 
 (defvar org-babel-lob-one-liner-regexp)
@@ -2180,9 +2198,9 @@ code ---- the results are extracted in the syntax of the source
 		 ((funcall proper-list-p result)
 		  (goto-char beg)
 		  (insert (concat (orgtbl-to-orgtbl
-				   (if (or (eq 'hline (car result))
-					   (and (listp (car result))
-						(listp (cdr (car result)))))
+				   (if (org-every
+					(lambda (el) (or (listp el) (eq el 'hline)))
+					result)
 				       result (list result))
 				   '(:fmt (lambda (cell) (format "%s" cell)))) "\n"))
 		  (goto-char beg) (when (org-at-table-p) (org-table-align)))
@@ -2219,7 +2237,7 @@ code ---- the results are extracted in the syntax of the source
 		  (funcall wrap ":RESULTS:" ":END:" 'no-escape))
 		 ((and (not (funcall proper-list-p result))
 		       (not (member "file" result-params)))
-		  (org-babel-examplize-region beg end results-switches)
+		  (org-babel-examplify-region beg end results-switches)
 		  (setq end (point)))))
 	      ;; possibly indent the results to match the #+results line
 	      (when (and (not inlinep) (numberp indent) indent (> indent 0)
@@ -2247,6 +2265,15 @@ code ---- the results are extracted in the syntax of the source
 	  (delete-region
 	   (if keep-keyword (1+ (match-end 0)) (1- (match-beginning 0)))
 	   (progn (forward-line 1) (org-babel-result-end))))))))
+
+(defun org-babel-remove-result-one-or-many (x)
+  "Remove the result of the current source block.
+If called with a prefix argument, remove all result blocks
+in the buffer."
+  (interactive "P")
+  (if x
+      (org-babel-map-src-blocks nil (org-babel-remove-result))
+    (org-babel-remove-result)))
 
 (defun org-babel-result-end ()
   "Return the point at the end of the current set of results."
@@ -2284,18 +2311,27 @@ file's directory then expand relative links."
 	      result)
 	    (if description (concat "[" description "]") ""))))
 
-(defvar org-babel-capitalize-examplize-region-markers nil
+(defvar org-babel-capitalize-example-region-markers nil
   "Make true to capitalize begin/end example markers inserted by code blocks.")
 
-(defun org-babel-examplize-region (beg end &optional results-switches)
+(define-obsolete-function-alias
+  'org-babel-examplize-region
+  'org-babel-examplify-region "24.5")
+
+(defun org-babel-examplify-region (beg end &optional results-switches)
   "Comment out region using the inline '==' or ': ' org example quote."
   (interactive "*r")
   (let ((chars-between (lambda (b e)
-			 (not (string-match "^[\\s]*$" (buffer-substring b e)))))
-	(maybe-cap (lambda (str) (if org-babel-capitalize-examplize-region-markers
-				     (upcase str) str))))
-    (if (or (funcall chars-between (save-excursion (goto-char beg) (point-at-bol)) beg)
-	    (funcall chars-between end (save-excursion (goto-char end) (point-at-eol))))
+			 (not (string-match "^[\\s]*$"
+					    (buffer-substring b e)))))
+	(maybe-cap (lambda (str) (if org-babel-capitalize-example-region-markers
+				(upcase str) str)))
+	(beg-bol (save-excursion (goto-char beg) (point-at-bol)))
+	(end-bol (save-excursion (goto-char end) (point-at-bol)))
+	(end-eol (save-excursion (goto-char end) (point-at-eol))))
+    (if (and (not (= end end-bol))
+	     (or (funcall chars-between beg-bol beg)
+		 (funcall chars-between end end-eol)))
 	(save-excursion
 	  (goto-char beg)
 	  (insert (format org-babel-inline-result-wrap
@@ -2404,6 +2440,16 @@ parameters when merging lists."
 				     (let ((r (cdr pair)))
 				       (if (stringp r) r (eval r)))))))
 	    (:file
+	     (when (cdr pair)
+	       (setq results (funcall e-merge results-exclusive-groups
+				      results '("file")))
+	       (unless (or (member "both" exports)
+			   (member "none" exports)
+			   (member "code" exports))
+		 (setq exports (funcall e-merge exports-exclusive-groups
+					exports '("results"))))
+	       (setq params (cons pair (assq-delete-all (car pair) params)))))
+	    (:file-ext
 	     (when (cdr pair)
 	       (setq results (funcall e-merge results-exclusive-groups
 				      results '("file")))
@@ -2605,7 +2651,8 @@ block but are passed literally to the \"example-block\"."
                     (and expansion
                          (mapconcat #'identity (nreverse (cdr expansion)) "")))
                   ;; Possibly raise an error if named block doesn't exist.
-                  (if (member lang org-babel-noweb-error-langs)
+                  (if (or org-babel-noweb-error-all-langs
+			  (member lang org-babel-noweb-error-langs))
                       (error "%s" (concat
                                    (org-babel-noweb-wrap source-name)
                                    "could not be resolved (see "
@@ -2719,9 +2766,9 @@ If the table is trivial, then return it as a scalar."
                       cell) t))
 
 (defun org-babel-chomp (string &optional regexp)
-  "Strip trailing spaces and carriage returns from STRING.
-Default regexp used is \"[ \f\t\n\r\v]\" but can be
-overwritten by specifying a regexp as a second argument."
+  "Strip a trailing space or carriage return from STRING.
+The default regexp used is \"[ \\f\\t\\n\\r\\v]\" but another one
+can be specified as the REGEXP argument."
   (let ((regexp (or regexp "[ \f\t\n\r\v]")))
     (while (and (> (length string) 0)
                 (string-match regexp (substring string -1)))
@@ -2729,12 +2776,12 @@ overwritten by specifying a regexp as a second argument."
     string))
 
 (defun org-babel-trim (string &optional regexp)
-  "Strip leading and trailing spaces and carriage returns from STRING.
-Like `org-babel-chomp' only it runs on both the front and back
-of the string."
-  (org-babel-chomp (org-reverse-string
-                    (org-babel-chomp (org-reverse-string string) regexp))
-                   regexp))
+  "Strip a leading and trailing space or carriage return from STRING.
+Like `org-babel-chomp', but run on both the first and last
+character of the string."
+  (org-babel-chomp
+   (org-reverse-string
+    (org-babel-chomp (org-reverse-string string) regexp)) regexp))
 
 (defun org-babel-tramp-handle-call-process-region
   (start end program &optional delete buffer display &rest args)
@@ -2867,6 +2914,51 @@ For the format of SAFE-LIST, see `org-babel-safe-header-args'."
 		     ((listp (cdr entry))
 		      (member (cdr pair) (cdr entry)))
 		     (t nil)))))))
+
+(defun org-babel-generate-file-param (src-name params)
+  "Calculate the filename for source block results.
+
+The directory is calculated from the :output-dir property of the
+source block; if not specified, use the current directory.
+
+If the source block has a #+NAME and the :file parameter does not
+contain any period characters, then the :file parameter is
+treated as an extension, and the output file name is the
+concatenation of the directory (as calculated above), the block
+name, a period, and the parameter value as a file extension.
+Otherwise, the :file parameter is treated as a full file name,
+and the output file name is the directory (as calculated above)
+plus the parameter value."
+  (let* ((file-cons (assq :file params))
+	   (file-ext-cons (assq :file-ext params))
+	   (file-ext (cdr-safe file-ext-cons))
+	   (dir (cdr-safe (assq :output-dir params)))
+	   fname)
+    ;; create the output-dir if it does not exist
+    (when dir
+      (make-directory dir t))
+    (if file-cons
+	;; :file given; add :output-dir if given
+	(when dir
+	  (setcdr file-cons (concat (file-name-as-directory dir) (cdr file-cons))))
+      ;; :file not given; compute from name and :file-ext if possible
+      (when (and src-name file-ext)
+	(if dir
+	    (setq fname (concat (file-name-as-directory (or dir ""))
+				src-name "." file-ext))
+	  (setq fname (concat src-name "." file-ext)))
+	(setq params (cons (cons :file fname) params))))
+    params))
+
+;;; Used by backends: R, Maxima, Octave.
+(defun org-babel-graphical-output-file (params)
+  "File where a babel block should send graphical output, per PARAMS."
+  (unless (assq :file params)
+    (if (assq :file-ext params)
+	(user-error ":file-ext given but no :file generated; did you forget to give a block a #+NAME?")
+      (user-error "No :file header argument given; cannot create graphical result.")))
+  (and (member "graphics" (cdr (assq :result-params params)))
+       (cdr (assq :file params))))
 
 (provide 'ob-core)
 

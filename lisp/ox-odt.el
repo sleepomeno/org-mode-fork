@@ -97,6 +97,27 @@
 		(org-open-file (org-odt-export-to-odt nil s v) 'system))))))
   :options-alist
   '((:odt-styles-file "ODT_STYLES_FILE" nil nil t)
+    ;; Other variables.
+    (:odt-content-template-file nil nil org-odt-content-template-file)
+    (:odt-convert-capabilities nil nil org-odt-convert-capabilities)
+    (:odt-convert-process nil nil org-odt-convert-process)
+    (:odt-convert-processes nil nil org-odt-convert-processes)
+    (:odt-create-custom-styles-for-srcblocks
+     nil nil org-odt-create-custom-styles-for-srcblocks)
+    (:odt-display-outline-level nil nil org-odt-display-outline-level)
+    (:odt-fontify-srcblocks nil nil org-odt-fontify-srcblocks)
+    (:odt-format-drawer-function nil nil org-odt-format-drawer-function)
+    (:odt-format-headline-function nil nil org-odt-format-headline-function)
+    (:odt-format-inlinetask-function nil nil org-odt-format-inlinetask-function)
+    (:odt-inline-formula-rules nil nil org-odt-inline-formula-rules)
+    (:odt-inline-image-rules nil nil org-odt-inline-image-rules)
+    (:odt-pixels-per-inch nil nil org-odt-pixels-per-inch)
+    (:odt-preferred-output-format nil nil org-odt-preferred-output-format)
+    (:odt-prettify-xml nil nil org-odt-prettify-xml)
+    (:odt-schema-dir nil nil org-odt-schema-dir)
+    (:odt-styles-file nil nil org-odt-styles-file)
+    (:odt-table-styles nil nil org-odt-table-styles)
+    (:odt-use-date-fields nil nil org-odt-use-date-fields)
     ;; Redefine regular option.
     (:with-latex nil "tex" org-odt-with-latex)))
 
@@ -107,7 +128,6 @@
 
 ;;; Function Declarations
 
-(declare-function org-id-find-id-file "org-id" (id))
 (declare-function hfy-face-to-style "htmlfontify" (fn))
 (declare-function hfy-face-or-def-to-name "htmlfontify" (fn))
 (declare-function archive-zip-extract "arc-mode" (archive name))
@@ -119,7 +139,7 @@
 ;;; Internal Variables
 
 (defconst org-odt-lib-dir
-  (file-name-directory load-file-name)
+  (file-name-directory (or load-file-name (buffer-file-name)))
   "Location of ODT exporter.
 Use this to infer values of `org-odt-styles-dir' and
 `org-odt-schema-dir'.")
@@ -1502,7 +1522,7 @@ original parsed data.  INFO is a plist holding export options."
 	      (email (and (plist-get info :with-email) email)))
 	 (concat
 	  ;; Title.
-	  (when title
+	  (when (org-string-nw-p title)
 	    (concat
 	     (format "\n<text:p text:style-name=\"%s\">%s</text:p>"
 		     "OrgTitle" (format "\n<text:title>%s</text:title>" title))
@@ -2713,10 +2733,8 @@ INFO is a plist holding contextual information.  See
 	 (path (cond
 		((member type '("http" "https" "ftp" "mailto"))
 		 (concat type ":" raw-path))
-		((string= type "file")
-		 (if (file-name-absolute-p raw-path)
-		     (concat "file://" (expand-file-name raw-path))
-		   (concat "file://" raw-path)))
+		((and (string= type "file") (file-name-absolute-p raw-path))
+		 (concat "file:" raw-path))
 		(t raw-path)))
 	 ;; Convert & to &amp; for correct XML representation
 	 (path (replace-regexp-in-string "&" "&amp;" path))
@@ -2735,11 +2753,11 @@ INFO is a plist holding contextual information.  See
      ((string= type "radio")
       (let ((destination (org-export-resolve-radio-link link info)))
 	(when destination
-	  (let ((desc (org-export-data (org-element-contents destination) info))
-		(href (org-export-solidify-link-text path)))
-	    (format
-	     "<text:bookmark-ref text:reference-format=\"text\" text:ref-name=\"OrgXref.%s\">%s</text:bookmark-ref>"
-	     href desc)))))
+	  (format
+	   "<text:bookmark-ref text:reference-format=\"text\" text:ref-name=\"OrgXref.%s\">%s</text:bookmark-ref>"
+	   (org-export-solidify-link-text
+	    (org-element-property :value destination))
+	   desc))))
      ;; Links pointing to a headline: Find destination and build
      ;; appropriate referencing command.
      ((member type '("custom-id" "fuzzy" "id"))
@@ -3131,7 +3149,7 @@ and prefix with \"OrgSrc\".  For example,
 		 (with-temp-buffer
 		   (insert code)
 		   (funcall lang-mode)
-		   (font-lock-fontify-buffer)
+		   (font-lock-ensure)
 		   (buffer-string))))
 	 (fontifier (if use-htmlfontify-p 'org-odt-htmlfontify-string
 		      'org-odt--encode-plain-text))

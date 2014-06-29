@@ -85,10 +85,11 @@ keyword."
 (defcustom org-icalendar-use-deadline '(event-if-not-todo todo-due)
   "Contexts where iCalendar export should use a deadline time stamp.
 
-This is a list with several symbols in it.  Valid symbol are:
+This is a list with possibly several symbols in it.  Valid symbols are:
+
 `event-if-todo'       Deadlines in TODO entries become calendar events.
 `event-if-not-todo'   Deadlines in non-TODO entries become calendar events.
-`todo-due'            Use deadlines in TODO entries as due-dates"
+`todo-due'            Use deadlines in TODO entries as due-dates."
   :group 'org-export-icalendar
   :type '(set :greedy t
 	      (const :tag "Deadlines in non-TODO entries become events"
@@ -101,7 +102,8 @@ This is a list with several symbols in it.  Valid symbol are:
 (defcustom org-icalendar-use-scheduled '(todo-start)
   "Contexts where iCalendar export should use a scheduling time stamp.
 
-This is a list with several symbols in it.  Valid symbol are:
+This is a list with possibly several symbols in it.  Valid symbols are:
+
 `event-if-todo'       Scheduling time stamps in TODO entries become an event.
 `event-if-not-todo'   Scheduling time stamps in non-TODO entries become an event.
 `todo-start'          Scheduling time stamps in TODO entries become start date.
@@ -174,8 +176,7 @@ The anniversaries are defined in the BBDB database."
 
 (defcustom org-icalendar-include-sexps t
   "Non-nil means export to iCalendar files should also cover sexp entries.
-These are entries like in the diary, but directly in an Org mode
-file."
+These are entries like in the diary, but directly in an Org file."
   :group 'org-export-icalendar
   :type 'boolean)
 
@@ -257,7 +258,21 @@ re-read the iCalendar file.")
   '((:exclude-tags
      "ICALENDAR_EXCLUDE_TAGS" nil org-icalendar-exclude-tags split)
     (:with-timestamps nil "<" org-icalendar-with-timestamps)
-    (:with-vtodo nil nil org-icalendar-include-todo)
+    ;; Other variables.
+    (:icalendar-alarm-time nil nil org-icalendar-alarm-time)
+    (:icalendar-categories nil nil org-icalendar-categories)
+    (:icalendar-combined-agenda-file nil nil org-icalendar-combined-agenda-file)
+    (:icalendar-combined-description nil nil org-icalendar-combined-description)
+    (:icalendar-combined-name nil nil org-icalendar-combined-name)
+    (:icalendar-date-time-format nil nil org-icalendar-date-time-format)
+    (:icalendar-include-bbdb-anniversaries nil nil org-icalendar-include-bbdb-anniversaries)
+    (:icalendar-include-body nil nil org-icalendar-include-body)
+    (:icalendar-include-sexps nil nil org-icalendar-include-sexps)
+    (:icalendar-include-todo nil nil org-icalendar-include-todo)
+    (:icalendar-store-UID nil nil org-icalendar-store-UID)
+    (:icalendar-timezone nil nil org-icalendar-timezone)
+    (:icalendar-use-deadline nil nil org-icalendar-use-deadline)
+    (:icalendar-use-scheduled nil nil org-icalendar-use-scheduled)
     ;; The following property will be non-nil when export has been
     ;; started from org-agenda-mode.  In this case, any entry without
     ;; a non-nil "ICALENDAR_MARK" property will be ignored.
@@ -302,14 +317,14 @@ which will be updated."
 
 INFO is a plist used as a communication channel.
 
-a headline is blocked when either:
+A headline is blocked when either
 
-  - It has children which are not all in a completed state.
+  - it has children which are not all in a completed state;
 
-  - It has a parent with the property :ORDERED:, and there are
-    siblings prior to it with incomplete status.
+  - it has a parent with the property :ORDERED:, and there are
+    siblings prior to it with incomplete status;
 
-  - Its parent is blocked because it has siblings that should be
+  - its parent is blocked because it has siblings that should be
     done first or is a child of a blocked grandparent entry."
   (or
    ;; Check if any child is not done.
@@ -478,10 +493,10 @@ or subject for the event."
 ;;; Filters
 
 (defun org-icalendar-clear-blank-lines (headline back-end info)
-  "Remove trailing blank lines in HEADLINE export.
+  "Remove blank lines in HEADLINE export.
 HEADLINE is a string representing a transcoded headline.
 BACK-END and INFO are ignored."
-  (replace-regexp-in-string "^\\(?:[ \t]*\n\\)*" "" headline))
+  (replace-regexp-in-string "^\\(?:[ \t]*\n\\)+" "" headline))
 
 
 
@@ -570,26 +585,32 @@ inlinetask within the section."
 	    ;; happen once ENTRY is one of them.
 	    (let ((counter 0))
 	      (mapconcat
-	       'identity
+	       #'identity
 	       (org-element-map (cons (org-element-property :title entry)
 				      (org-element-contents inside))
 		   'timestamp
 		 (lambda (ts)
-		   (let ((uid (format "TS%d-%s" (incf counter) uid)))
-		     (org-icalendar--vevent entry ts uid summary loc desc cat)))
+		   (when (let ((type (org-element-property :type ts)))
+			   (case (plist-get info :with-timestamps)
+			     (active (memq type '(active active-range)))
+			     (inactive (memq type '(inactive inactive-range)))
+			     ((t) t)))
+		     (let ((uid (format "TS%d-%s" (incf counter) uid)))
+		       (org-icalendar--vevent
+			entry ts uid summary loc desc cat))))
 		 info nil (and (eq type 'headline) 'inlinetask))
 	       ""))
 	    ;; Task: First check if it is appropriate to export it.
 	    ;; If so, call `org-icalendar--vtodo' to transcode it
 	    ;; into a "VTODO" component.
 	    (when (and todo-type
-		       (case (plist-get info :with-vtodo)
+		       (case (plist-get info :icalendar-include-todo)
 			 (all t)
 			 (unblocked
 			  (and (eq type 'headline)
 			       (not (org-icalendar-blocked-headline-p
 				     entry info))))
-			 ('t (eq todo-type 'todo))))
+			 ((t) (eq todo-type 'todo))))
 	      (org-icalendar--vtodo entry uid summary loc desc cat))
 	    ;; Diary-sexp: Collect every diary-sexp element within
 	    ;; ENTRY and its title, and transcode them.  If ENTRY is
@@ -597,7 +618,7 @@ inlinetask within the section."
 	    ;; separately.
 	    (when org-icalendar-include-sexps
 	      (let ((counter 0))
-		(mapconcat 'identity
+		(mapconcat #'identity
 			   (org-element-map
 			       (cons (org-element-property :title entry)
 				     (org-element-contents inside))
@@ -613,7 +634,7 @@ inlinetask within the section."
        ;; inlinetask within it.  In agenda export, this is independent
        ;; from the mark (or lack thereof) on the entry.
        (when (eq type 'headline)
-	 (mapconcat 'identity
+	 (mapconcat #'identity
 		    (org-element-map inside 'inlinetask
 		      (lambda (task) (org-icalendar-entry task nil info))
 		      info) ""))

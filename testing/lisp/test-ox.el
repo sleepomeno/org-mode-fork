@@ -690,7 +690,17 @@ Paragraph <2012-03-29 Thu>[2012-03-29 Thu]"
 		(template . (lambda (c i) (org-export-data
 				      (plist-get i :title) i)))
 		(section . (lambda (s c i) c))))
-	     nil nil nil '(:with-sub-superscript nil))))))
+	     nil nil nil '(:with-sub-superscript nil)))))
+  ;; Special case: multiples uninterpreted objects in a row.
+  (should
+   (equal "a_b_c_d\n"
+	  (org-test-with-temp-text "a_b_c_d"
+	    (org-export-as
+	     (org-export-create-backend
+	      :transcoders '((subscript . (lambda (s c i) "dummy"))
+			     (paragraph . (lambda (p c i) c))
+			     (section . (lambda (s c i) c))))
+	     nil nil nil '(:with-sub-superscript {}))))))
 
 (ert-deftest test-org-export/export-scope ()
   "Test all export scopes."
@@ -825,22 +835,82 @@ body\n")))
       (org-export-expand-include-keyword)
       (buffer-string))))
   ;; Inclusion within an example block.
-  (org-test-with-temp-text
-      (format "#+INCLUDE: \"%s/examples/include.org\" :lines \"1-2\" example"
-	      org-test-dir)
-    (org-export-expand-include-keyword)
-    (should
-     (equal
-      (buffer-string)
-      "#+BEGIN_EXAMPLE\nSmall Org file with an include keyword.\n#+END_EXAMPLE\n")))
+  (should
+   (equal
+    "#+BEGIN_EXAMPLE\nSmall Org file with an include keyword.\n#+END_EXAMPLE\n"
+    (org-test-with-temp-text
+     (format "#+INCLUDE: \"%s/examples/include.org\" :lines \"1-2\" EXAMPLE"
+	     org-test-dir)
+     (org-export-expand-include-keyword)
+     (buffer-string))))
   ;; Inclusion within a src-block.
-  (org-test-with-temp-text
-      (format
-       "#+INCLUDE: \"%s/examples/include.org\" :lines \"4-5\" src emacs-lisp"
-       org-test-dir)
-    (org-export-expand-include-keyword)
-    (should (equal (buffer-string)
-		   "#+BEGIN_SRC emacs-lisp\n(+ 2 1)\n#+END_SRC\n"))))
+  (should
+   (equal
+    "#+BEGIN_SRC emacs-lisp\n(+ 2 1)\n#+END_SRC\n"
+    (org-test-with-temp-text
+     (format
+      "#+INCLUDE: \"%s/examples/include.org\" :lines \"4-5\" SRC emacs-lisp"
+      org-test-dir)
+     (org-export-expand-include-keyword)
+     (buffer-string))))
+  ;; Inclusion within an html export-block.
+  (should
+   (equal
+    "#+BEGIN_HTML\n<p>HTML!</p>\n#+END_HTML\n"
+    (org-test-with-temp-text
+     (format
+      "#+INCLUDE: \"%s/examples/include.html\" HTML"
+      org-test-dir)
+     (org-export-expand-include-keyword)
+     (buffer-string))))
+  ;; Inclusion within an center paragraph
+  (should
+   (equal
+    "#+BEGIN_CENTER\nSuccess!\n#+END_CENTER\n"
+    (org-test-with-temp-text
+     (format
+      "#+INCLUDE: \"%s/examples/include2.org\" CENTER"
+      org-test-dir)
+     (org-export-expand-include-keyword)
+     (buffer-string))))
+  ;; Footnotes labels are local to each included file.
+  (should
+   (= 6
+      (length
+       (delete-dups
+	(let ((contents "
+Footnotes[fn:1], [fn:test] and [fn:inline:anonymous footnote].
+\[fn:1] Footnote 1
+\[fn:test] Footnote \"test\""))
+	  (org-test-with-temp-text-in-file contents
+	    (let ((file1 (buffer-file-name)))
+	      (org-test-with-temp-text-in-file contents
+		(let ((file2 (buffer-file-name)))
+		  (org-test-with-temp-text
+		      (format "#+INCLUDE: \"%s\"\n#+INCLUDE: \"%s\""
+			      file1 file2)
+		    (org-export-expand-include-keyword)
+		    (org-element-map (org-element-parse-buffer)
+			'footnote-reference
+		      (lambda (ref)
+			(org-element-property :label ref)))))))))))))
+  ;; Footnotes labels are not local to each include keyword.
+  (should
+   (= 3
+      (length
+       (delete-dups
+	(let ((contents "
+Footnotes[fn:1], [fn:test] and [fn:inline:anonymous footnote].
+\[fn:1] Footnote 1
+\[fn:test] Footnote \"test\""))
+	  (org-test-with-temp-text-in-file contents
+	    (let ((file (buffer-file-name)))
+	      (org-test-with-temp-text
+		  (format "#+INCLUDE: \"%s\"\n#+INCLUDE: \"%s\"" file file)
+		(org-export-expand-include-keyword)
+		(org-element-map (org-element-parse-buffer)
+		    'footnote-reference
+		  (lambda (ref) (org-element-property :label ref))))))))))))
 
 (ert-deftest test-org-export/expand-macro ()
   "Test macro expansion in an Org buffer."
@@ -2027,6 +2097,24 @@ Another text. (ref:text)
   ;; Radio target with objects.
   (should
    (org-test-with-temp-text "<<<radio \\alpha>>> radio \\alpha"
+     (org-update-radio-target-regexp)
+     (let* ((tree (org-element-parse-buffer))
+	    (info `(:parse-tree ,tree)))
+       (org-export-resolve-radio-link
+	(org-element-map tree 'link 'identity info t)
+	info))))
+  ;; Radio target with objects at its beginning.
+  (should
+   (org-test-with-temp-text "<<<\\alpha radio>>> \\alpha radio"
+     (org-update-radio-target-regexp)
+     (let* ((tree (org-element-parse-buffer))
+	    (info `(:parse-tree ,tree)))
+       (org-export-resolve-radio-link
+	(org-element-map tree 'link 'identity info t)
+	info))))
+  ;; Radio link next to an apostrophe.
+  (should
+   (org-test-with-temp-text "<<<radio>>> radio's"
      (org-update-radio-target-regexp)
      (let* ((tree (org-element-parse-buffer))
 	    (info `(:parse-tree ,tree)))

@@ -339,7 +339,7 @@ This option can also be set with the OPTIONS keyword, e.g.:
 (defcustom org-koma-letter-use-title t
   "Non-nil means use a title in the letter if present.
 This option can also be set with the OPTIONS keyword,
-e.g. \"with-title:nil\".
+e.g. \"title:nil\".
 
 See also `org-koma-letter-prefer-subject' for the handling of
 title versus subject."
@@ -390,6 +390,7 @@ was not present."
   '((:latex-class "LATEX_CLASS" nil org-koma-letter-default-class t)
     (:lco "LCO" nil org-koma-letter-class-option-file)
     (:author "AUTHOR" nil (org-koma-letter--get-value org-koma-letter-author) t)
+    (:author-changed-in-buffer-p "AUTHOR" nil nil t)
     (:from-address "FROM_ADDRESS" nil nil newline)
     (:phone-number "PHONE_NUMBER" nil org-koma-letter-phone-number)
     (:email "EMAIL" nil (org-koma-letter--get-value org-koma-letter-email) t)
@@ -617,7 +618,8 @@ holding export options."
    (org-koma-letter--build-settings 'buffer info)
    ;; From address.
    (let ((from-address (org-koma-letter--determine-to-and-from info 'from)))
-     (and from-address (format "\\setkomavar{fromaddress}{%s}\n" from-address)))
+     (when (org-string-nw-p from-address) 
+       (format "\\setkomavar{fromaddress}{%s}\n" from-address)))
    ;; Date.
    (format "\\date{%s}\n" (org-export-data (org-export-get-date info) info))
    ;; Document start

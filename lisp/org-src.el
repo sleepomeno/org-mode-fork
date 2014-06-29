@@ -119,11 +119,12 @@ These are the regions where each line starts with a colon."
   "If non-nil preserve leading whitespace characters on export.
 If non-nil leading whitespace characters in source code blocks
 are preserved on export, and when switching between the org
-buffer and the language mode edit buffer.  If this variable is nil
-then, after editing with \\[org-edit-src-code], the
-minimum (across-lines) number of leading whitespace characters
-are removed from all lines, and the code block is uniformly
-indented according to the value of `org-edit-src-content-indentation'."
+buffer and the language mode edit buffer.
+
+When this variable is nil, after editing with \\[org-edit-src-code],
+the minimum (across-lines) number of leading whitespace characters
+are removed from all lines, and the code block is uniformly indented
+according to the value of `org-edit-src-content-indentation'."
   :group 'org-edit-structure
   :type 'boolean)
 
@@ -180,7 +181,7 @@ but which mess up the display of a snippet in Org exported files.")
   '(("ocaml" . tuareg) ("elisp" . emacs-lisp) ("ditaa" . artist)
     ("asymptote" . asy) ("dot" . fundamental) ("sqlite" . sql)
     ("calc" . fundamental) ("C" . c) ("cpp" . c++) ("C++" . c++)
-    ("screen" . shell-script))
+    ("screen" . shell-script) ("shell" . sh) ("bash" . sh))
   "Alist mapping languages to their major mode.
 The key is the language name, the value is the string that should
 be inserted as the name of the major mode.  For many languages this is
@@ -348,7 +349,7 @@ the display of windows containing the Org buffer and the code buffer."
 	  (condition-case e
 	      (funcall lang-f)
 	    (error
-	     (error "Language mode `%s' fails with: %S" lang-f (nth 1 e)))))
+	     (message "Language mode `%s' fails with: %S" lang-f (nth 1 e)))))
 	(dolist (pair transmitted-variables)
 	  (org-set-local (car pair) (cadr pair)))
 	;; Remove protecting commas from visible part of buffer.
@@ -556,13 +557,6 @@ the language, a switch telling if the content should be in a single line."
 	 (append
 	  org-edit-src-region-extra
 	  '(
-	    ("<src\\>[^<]*>[ \t]*\n?" "\n?[ \t]*</src>" lang)
-	    ("<literal\\>[^<]*>[ \t]*\n?" "\n?[ \t]*</literal>" style)
-	    ("<example>[ \t]*\n?" "\n?[ \t]*</example>" "fundamental")
-	    ("<lisp>[ \t]*\n?" "\n?[ \t]*</lisp>" "emacs-lisp")
-	    ("<perl>[ \t]*\n?" "\n?[ \t]*</perl>" "perl")
-	    ("<python>[ \t]*\n?" "\n?[ \t]*</python>" "python")
-	    ("<ruby>[ \t]*\n?" "\n?[ \t]*</ruby>" "ruby")
 	    ("^[ \t]*#\\+begin_src\\( \\([^ \t\n]+\\)\\)?.*\n" "\n[ \t]*#\\+end_src" 2)
 	    ("^[ \t]*#\\+begin_example.*\n" "\n[ \t]*#\\+end_example" "fundamental")
 	    ("^[ \t]*#\\+html:" "\n" "html" single-line)
@@ -577,14 +571,6 @@ the language, a switch telling if the content should be in a single line."
 	(pos (point))
 	re1 re2 single beg end lang lfmt match-re1 ind entry)
     (catch 'exit
-      (when (org-at-table.el-p)
-	(re-search-backward "^[\t]*[^ \t|\\+]" nil t)
-	(setq beg (1+ (point-at-eol)))
-	(goto-char beg)
-	(or (re-search-forward "^[\t]*[^ \t|\\+]" nil t)
-	    (progn (goto-char (point-max)) (newline)))
-	(setq end (1- (point-at-bol)))
-	(throw 'exit (list beg end 'table.el nil nil 0)))
       (while (setq entry (pop re-list))
 	(setq re1 (car entry) re2 (nth 1 entry) lang (nth 2 entry)
 	      single (nth 3 entry))
@@ -615,7 +601,15 @@ the language, a switch telling if the content should be in a single line."
 			(throw 'exit
 			       (list (match-end 0) end
 				     (org-edit-src-get-lang lang)
-				     single lfmt ind))))))))))))
+				     single lfmt ind)))))))))
+      (when (org-at-table.el-p)
+	(re-search-backward "^[\t]*[^ \t|\\+]" nil t)
+	(setq beg (1+ (point-at-eol)))
+	(goto-char beg)
+	(or (re-search-forward "^[\t]*[^ \t|\\+]" nil t)
+	    (progn (goto-char (point-max)) (newline)))
+	(setq end (1- (point-at-bol)))
+	(throw 'exit (list beg end 'table.el nil nil 0))))))
 
 (defun org-edit-src-get-lang (lang)
   "Extract the src language."
@@ -737,8 +731,8 @@ with \",*\", \",#+\", \",,*\" and \",,#+\"."
       (unless (or single preserve-indentation (= total-nindent 0))
 	(setq indent (make-string total-nindent ?\ ))
 	(goto-char (point-min))
-	(while (re-search-forward "^" nil t)
-	  (replace-match indent)))
+	(while (re-search-forward "\\(^\\).+" nil t)
+	  (replace-match indent nil nil nil 1)))
       (if (org-bound-and-true-p org-edit-src-picture)
 	  (setq total-nindent (+ total-nindent 2)))
       (setq code (buffer-string))
@@ -894,17 +888,6 @@ issued in the language major mode buffer."
   :version "24.1"
   :group 'org-babel)
 
-(defun org-src-native-tab-command-maybe ()
-  "Perform language-specific TAB action.
-Alter code block according to what TAB does in the language major mode."
-  (and org-src-tab-acts-natively
-       (org-in-src-block-p)
-       (not (equal this-command 'org-shifttab))
-       (let ((org-src-strip-leading-and-trailing-blank-lines nil))
-	 (org-babel-do-key-sequence-in-edit-buffer (kbd "TAB")))))
-
-(add-hook 'org-tab-first-hook 'org-src-native-tab-command-maybe)
-
 (defun org-src-font-lock-fontify-block (lang start end)
   "Fontify code block.
 This function is called by emacs automatic fontification, as long
@@ -923,7 +906,7 @@ fontification of code blocks see `org-src-fontify-block' and
 	    (delete-region (point-min) (point-max))
 	    (insert string " ") ;; so there's a final property change
 	    (unless (eq major-mode lang-mode) (funcall lang-mode))
-	    (font-lock-fontify-buffer)
+	    (font-lock-ensure)
 	    (setq pos (point-min))
 	    (while (setq next (next-single-property-change pos 'face))
 	      (put-text-property

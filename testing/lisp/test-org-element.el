@@ -1003,7 +1003,42 @@ Some other text
      (org-element-property :FOO (org-element-at-point))))
   (should-not
    (org-test-with-temp-text "* Headline\n:PROPERTIES:\n:foo: bar\n:END:"
-     (org-element-property :foo (org-element-at-point)))))
+     (org-element-property :foo (org-element-at-point))))
+  ;; Also parse properties associated in inlinetasks.
+  (when (featurep 'org-inlinetask)
+    (should
+     (org-test-with-temp-text "*************** Inlinetask
+:PROPERTIES:
+:foo: bar
+:END:
+*************** END"
+       (org-element-property :FOO (org-element-at-point)))))
+  ;; Do not find property drawer in a verbatim area.
+  (should-not
+   (org-test-with-temp-text
+       "* Headline
+#+BEGIN_EXAMPLE
+:PROPERTIES:
+:foo: bar
+:END:
+#+END_EXAMPLE"
+     (org-element-property :FOO (org-element-at-point))))
+  ;; Do not use properties from a drawer associated to an inlinetask.
+  (when (featurep 'org-inlinetask)
+    (should-not
+     (org-test-with-temp-text
+	 "* Headline
+*************** Inlinetask
+:PROPERTIES:
+:foo: bar
+:END:
+*************** END"
+       (org-element-property
+	:FOO (let ((org-inlinetask-min-level 15)) (org-element-at-point))))))
+  ;; Do not find incomplete drawers.
+  (should-not
+   (org-test-with-temp-text "* Headline\n:PROPERTIES:\n:foo: bar"
+     (org-element-property :FOO (org-element-at-point)))))
 
 
 ;;;; Horizontal Rule
@@ -1061,55 +1096,58 @@ Some other text
   "Test `inlinetask' parser."
   (when (featurep 'org-inlinetask)
     (let ((org-inlinetask-min-level 15))
-      ;; 1. Regular inlinetask.
+      ;; Regular inlinetask.
       (should
+       (eq 'inlinetask
+	   (org-test-with-temp-text
+	       "*************** Task\nTest\n*************** END"
+	     (org-element-type (org-element-at-point)))))
+      ;; Degenerate inlinetask.
+      (should
+       (eq 'inlinetask
+	   (org-test-with-temp-text "*************** Task"
+	     (org-element-type (org-element-at-point)))))
+      ;; Mixed inlinetasks.
+      (should-not
        (org-test-with-temp-text
-	   "*************** Task\nTest\n*************** END"
-	 (org-element-map (org-element-parse-buffer) 'inlinetask 'identity)))
-      ;; 2. Degenerate inlinetask.
-      (should
-       (org-test-with-temp-text "*************** Task"
-	 (org-element-map (org-element-parse-buffer) 'inlinetask 'identity)))
+	   "
+*************** Task
+*************** Task2
+Contents
+*************** END"
+	 (forward-line)
+	 (goto-char (org-element-property :end (org-element-at-point)))
+	 (eobp)))
       ;; TODO keyword.
       (should
        (equal
 	"TODO"
 	(let ((org-todo-keywords '((sequence "TODO" "DONE"))))
 	  (org-test-with-temp-text "*************** TODO Task"
-	    (org-element-property
-	     :todo-keyword
-	     (org-element-map (org-element-parse-buffer) 'inlinetask
-	       'identity nil t))))))
+	    (org-element-property :todo-keyword (org-element-at-point))))))
       ;; Planning info.
       (should
-       (equal
-	"2012-03-29 thu."
-	(org-test-with-temp-text "
+       (org-test-with-temp-text "
 *************** Task
 DEADLINE: <2012-03-29 thu.>"
-	  (org-element-property
-	   :deadline
-	   (org-element-map (org-element-parse-buffer) 'inlinetask 'identity nil t)))))
+	 (forward-line)
+	 (org-element-property :deadline (org-element-at-point))))
       ;; Priority.
       (should
-       (equal
+       (eq
 	?A
 	(org-test-with-temp-text "
 *************** [#A] Task"
-	  (org-element-property
-	   :priority
-	   (org-element-map
-	       (org-element-parse-buffer) 'inlinetask 'identity nil t)))))
+	  (forward-line)
+	  (org-element-property :priority (org-element-at-point)))))
       ;; Tags.
       (should
        (equal
 	'("test")
 	(org-test-with-temp-text "
 *************** Task :test:"
-	  (org-element-property
-	   :tags
-	   (org-element-map
-	       (org-element-parse-buffer) 'inlinetask 'identity nil t)))))
+	  (forward-line)
+	  (org-element-property :tags (org-element-at-point)))))
       ;; Regular properties are accessed through upper case keywords.
       (should
        (org-test-with-temp-text "
@@ -1333,12 +1371,11 @@ e^{i\\pi}+1=0
   (should
    (equal
     "radio"
-    (org-test-with-temp-text "A radio link"
+    (org-test-with-temp-text "<<<radio>>>A radio link"
+      (org-update-radio-target-regexp)
       (org-element-property
        :type
-       (org-element-map
-	   (let ((org-target-link-regexp "radio")) (org-element-parse-buffer))
-	   'link 'identity nil t)))))
+       (org-element-map (org-element-parse-buffer) 'link #'identity nil t)))))
   ;; Standard link.
   ;;
   ;; ... with description.
@@ -1426,6 +1463,25 @@ e^{i\\pi}+1=0
 	(lambda (l) (list (org-element-property :type l)
 		     (org-element-property :path l)
 		     (org-element-property :application l)))))))
+  ;; ... `:path' in a file-type link must be compatible with "file"
+  ;; scheme in URI syntax, even if Org syntax isn't.
+  (should
+   (org-test-with-temp-text-in-file ""
+     (let ((file (expand-file-name (buffer-file-name))))
+       (insert (format "[[file://%s]]" file))
+       (equal (org-element-property :path (org-element-context))
+	      (concat "//" file)))))
+  (should
+   (org-test-with-temp-text-in-file ""
+     (let ((file (expand-file-name (buffer-file-name))))
+       (insert (format "[[file:%s]]" file))
+       (equal (org-element-property :path (org-element-context))
+	      (concat "//" file)))))
+  (should
+   (org-test-with-temp-text-in-file ""
+     (let ((file (file-relative-name (buffer-file-name))))
+       (insert (format "[[file:%s]]" file))
+       (list (org-element-property :path (org-element-context)) file))))
   ;; Plain link.
   (should
    (org-test-with-temp-text "A link: http://orgmode.org"
@@ -1684,12 +1740,28 @@ Outside list"
   "Test `radio-target' parser."
   ;; Standard test.
   (should
-   (org-test-with-temp-text "<<<radio>>>"
-     (org-element-map (org-element-parse-buffer) 'radio-target 'identity)))
+   (eq 'radio-target
+       (org-test-with-temp-text "<<<radio>>>"
+	 (org-element-type (org-element-context)))))
   ;; Radio targets with objects.
   (should
-   (org-test-with-temp-text "<<<radio \\alpha>>>"
-     (org-element-map (org-element-parse-buffer) 'radio-target 'identity))))
+   (eq 'radio-target
+       (org-test-with-temp-text "<<<radio \\alpha>>>"
+	 (org-element-type (org-element-context)))))
+  ;; Radio targets starting with an object.
+  (should
+   (eq 'radio-target
+       (org-test-with-temp-text "<<<\\alpha radio>>>"
+	 (org-element-type (org-element-context)))))
+  ;; Radio targets cannot begin or end with white space.
+  (should-not
+   (eq 'radio-target
+       (org-test-with-temp-text "<<< radio>>>"
+	 (org-element-type (org-element-context)))))
+  (should-not
+   (eq 'radio-target
+       (org-test-with-temp-text "<<<radio >>>"
+	 (org-element-type (org-element-context))))))
 
 
 ;;;; Section
@@ -1893,8 +1965,13 @@ Outside list"
 
 (ert-deftest test-org-element/table-cell-parser ()
   "Test `table-cell' parser."
+  ;; Regular table cell.
   (should
    (org-test-with-temp-text "| a |"
+     (org-element-map (org-element-parse-buffer) 'table-cell 'identity)))
+  ;; Last vertical bar may be omitted.
+  (should
+   (org-test-with-temp-text "| a "
      (org-element-map (org-element-parse-buffer) 'table-cell 'identity))))
 
 
@@ -2843,34 +2920,38 @@ Paragraph \\alpha."
 
 (ert-deftest test-org-element/normalize-contents ()
   "Test `org-element-normalize-contents' specifications."
-  ;; 1. Remove maximum common indentation from element's contents.
+  ;; Remove maximum common indentation from element's contents.
   (should
    (equal
     (org-element-normalize-contents
      '(paragraph nil "  Two spaces\n   Three spaces"))
     '(paragraph nil "Two spaces\n Three spaces")))
-  ;; 2. Ignore objects within contents when computing maximum common
-  ;;    indentation.
+  ;; Ignore objects within contents when computing maximum common
+  ;; indentation.
   (should
    (equal
     (org-element-normalize-contents
      '(paragraph nil " One " (emphasis nil "space") "\n  Two spaces"))
     '(paragraph nil "One " (emphasis nil "space") "\n Two spaces")))
-  ;; 3. Ignore blank lines.
+  ;; Ignore blank lines.
   (should
    (equal
     (org-element-normalize-contents
      '(paragraph nil "  Two spaces\n\n \n  Two spaces"))
     '(paragraph nil "Two spaces\n\n \nTwo spaces")))
-  ;; 4. Recursively enter objects in order to compute common
-  ;;    indentation.
+  (should
+   (equal
+    '(paragraph nil " Two spaces\n" (verbatim nil "V") "\n Two spaces")
+    (org-element-normalize-contents
+     '(paragraph nil "  Two spaces\n " (verbatim nil "V") "\n  Two spaces"))))
+  ;; Recursively enter objects in order to compute common indentation.
   (should
    (equal
     (org-element-normalize-contents
      '(paragraph nil "  Two spaces " (bold nil " and\n One space")))
     '(paragraph nil " Two spaces " (bold nil " and\nOne space"))))
-  ;; 5. When optional argument is provided, ignore first line
-  ;;    indentation.
+  ;; When optional argument is provided, ignore first line
+  ;; indentation.
   (should
    (equal
     (org-element-normalize-contents
@@ -2983,6 +3064,17 @@ Paragraph \\alpha."
        (org-test-with-temp-text "| a | b {{{macro}}} |"
 	 (progn (search-forward "b")
 		(org-element-type (org-element-context))))))
+  ;; Find objects in planning lines.
+  (should
+   (eq 'timestamp
+       (org-test-with-temp-text "* H\n  SCHEDULED: <2012-03-29 thu.>"
+	 (search-forward "2012")
+	 (org-element-type (org-element-context)))))
+  (should-not
+   (eq 'timestamp
+       (org-test-with-temp-text "* H\n  SCHEDULED: <2012-03-29 thu.>"
+	 (search-forward "SCHEDULED")
+	 (org-element-type (org-element-context)))))
   ;; Find objects in document keywords.
   (should
    (eq 'macro
@@ -3006,6 +3098,12 @@ Paragraph \\alpha."
        (org-test-with-temp-text "#+caption: *bold*\nParagraph"
 	 (progn (search-forward "*")
 		(org-element-type (org-element-context))))))
+  ;; Find objects at the end of buffer.
+  (should
+   (eq 'bold
+       (org-test-with-temp-text "*bold*"
+	 (goto-char (point-max))
+	 (org-element-type (org-element-context)))))
   ;; Correctly set `:parent' property.
   (should
    (eq 'paragraph
@@ -3026,8 +3124,131 @@ Paragraph \\alpha."
        (org-test-with-temp-text "Some *text with _underline_ text*"
 	 (progn
 	   (search-forward "under")
-	   (org-element-type (org-element-context (org-element-at-point))))))))
+	   (org-element-type (org-element-context (org-element-at-point)))))))
+  ;; Special case: bold object at the beginning of a headline.
+  (should
+   (eq 'bold
+       (org-test-with-temp-text "* *bold*"
+	 (search-forward "bo")
+	 (org-element-type (org-element-context)))))
+  ;; Special case: incomplete cell at the end of a table row.
+  (should
+   (eq 'table-cell
+       (org-test-with-temp-text "|a|b|c"
+	 (goto-char (point-max))
+	 (org-element-type (org-element-context))))))
+
+
+
+;;; Test Cache.
+
+(ert-deftest test-org-element/cache ()
+  "Test basic expectations and common pitfalls for cache."
+  ;; Shift positions.
+  (should
+   (equal '(18 . 23)
+	  (org-test-with-temp-text "para1\n\npara2\n\npara3"
+	    (let ((org-element-use-cache t))
+	      (save-excursion (goto-char (point-max)) (org-element-at-point))
+	      (insert "add")
+	      (forward-line 4)
+	      (let ((element (org-element-at-point)))
+		(cons (org-element-property :begin element)
+		      (org-element-property :end element)))))))
+  ;; Partial shifting: when the contents of a greater element are
+  ;; modified, only shift ending positions.
+  (should
+   (org-test-with-temp-text
+       "#+BEGIN_CENTER\nPara1\n\nPara2\n\nPara3\n#+END_CENTER"
+     (let ((org-element-use-cache t))
+       (save-excursion (search-forward "3") (org-element-at-point))
+       (search-forward "Para2")
+       (insert " ")
+       (let ((element (org-element-property :parent (org-element-at-point))))
+	 (equal (cons (org-element-property :begin element)
+		      (org-element-property :end element))
+		(cons (point-min) (point-max)))))))
+  ;; Re-parent shifted elements.
+  (should
+   (eq 'item
+       (org-test-with-temp-text "- item\n\n\n  para1\n  para2"
+	 (let ((org-element-use-cache t))
+	   (end-of-line)
+	   (org-element-at-point)
+	   (save-excursion (goto-char (point-max)) (org-element-at-point))
+	   (forward-line)
+	   (delete-char 1)
+	   (goto-char (point-max))
+	   (org-element-type
+	    (org-element-property :parent (org-element-at-point)))))))
+  ;; Modifying the last line of an element alters the element below.
+  (should
+   (org-test-with-temp-text "para1\n\npara2"
+     (let ((org-element-use-cache t))
+       (goto-char (point-max))
+       (org-element-at-point)
+       (forward-line -1)
+       (insert "merge")
+       (let ((element (org-element-at-point)))
+	 (equal (cons (org-element-property :begin element)
+		      (org-element-property :end element))
+		(cons (point-min) (point-max)))))))
+  ;; Modifying the first line of an element alters the element above.
+  (should
+   (org-test-with-temp-text ": fixed-width\n:not-fixed-width"
+     (let ((org-element-use-cache t))
+       (goto-char (point-max))
+       (org-element-at-point)
+       (search-backward ":")
+       (forward-char)
+       (insert " ")
+       (let ((element (org-element-at-point)))
+	 (equal (cons (org-element-property :begin element)
+		      (org-element-property :end element))
+		(cons (point-min) (point-max)))))))
+  ;; Sensitive change: adding a line alters document structure both
+  ;; above and below.
+  (should
+   (eq 'example-block
+       (org-test-with-temp-text "#+BEGIN_EXAMPLE\nPara1\n\nPara2\n"
+	 (let ((org-element-use-cache t))
+	   (goto-char (point-max))
+	   (org-element-at-point)
+	   (insert "#+END_EXAMPLE")
+	   (search-backward "Para1")
+	   (org-element-type (org-element-at-point))))))
+  (should
+   (eq 'example-block
+       (org-test-with-temp-text "Para1\n\nPara2\n#+END_EXAMPLE"
+	 (let ((org-element-use-cache t))
+	   (save-excursion (goto-char (point-max)) (org-element-at-point))
+	   (insert "#+BEGIN_EXAMPLE\n")
+	   (search-forward "Para2")
+	   (org-element-type (org-element-at-point))))))
+  ;; Sensitive change: removing a line alters document structure both
+  ;; above and below.
+  (should
+   (eq 'example-block
+       (org-test-with-temp-text
+	   "# +BEGIN_EXAMPLE\nPara1\n\nPara2\n#+END_EXAMPLE"
+	 (let ((org-element-use-cache t))
+	   (save-excursion (goto-char (point-max)) (org-element-at-point))
+	   (forward-char)
+	   (delete-char 1)
+	   (search-forward "Para2")
+	   (org-element-type (org-element-at-point))))))
+  (should
+   (eq 'example-block
+       (org-test-with-temp-text
+	   "#+BEGIN_EXAMPLE\nPara1\n\nPara2\n# +END_EXAMPLE"
+	 (let ((org-element-use-cache t))
+	   (save-excursion (goto-char (point-max)) (org-element-at-point))
+	   (search-forward "# ")
+	   (delete-char -1)
+	   (search-backward "Para1")
+	   (org-element-type (org-element-at-point)))))))
 
 
 (provide 'test-org-element)
+
 ;;; test-org-element.el ends here

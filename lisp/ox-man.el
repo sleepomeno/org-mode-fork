@@ -112,7 +112,16 @@
   :options-alist
   '((:man-class "MAN_CLASS" nil nil t)
     (:man-class-options "MAN_CLASS_OPTIONS" nil nil t)
-    (:man-header-extra "MAN_HEADER" nil nil newline)))
+    (:man-header-extra "MAN_HEADER" nil nil newline)
+    ;; Other variables.
+    (:man-tables-centered nil nil org-man-tables-centered)
+    (:man-tables-verbatim nil nil org-man-tables-verbatim)
+    (:man-table-scientific-notation nil nil org-man-table-scientific-notation)
+    (:man-source-highlight nil nil org-man-source-highlight)
+    (:man-source-highlight-langs nil nil org-man-source-highlight-langs)
+    (:man-pdf-process nil nil org-man-pdf-process)
+    (:man-logfiles-extensions nil nil org-man-logfiles-extensions)
+    (:man-remove-logfiles nil nil org-man-remove-logfiles)))
 
 
 
@@ -638,21 +647,15 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
 DESC is the description part of the link, or the empty string.
 INFO is a plist holding contextual information.  See
 `org-export-data'."
-
   (let* ((type (org-element-property :type link))
          (raw-path (org-element-property :path link))
          ;; Ensure DESC really exists, or set it to nil.
          (desc (and (not (string= desc "")) desc))
-
          (path (cond
                 ((member type '("http" "https" "ftp" "mailto"))
                  (concat type ":" raw-path))
-                ((string= type "file")
-                 (when (string-match "\\(.+\\)::.+" raw-path)
-                   (setq raw-path (match-string 1 raw-path)))
-                 (if (file-name-absolute-p raw-path)
-                     (concat "file://" (expand-file-name raw-path))
-                   (concat "file://" raw-path)))
+                ((and (string= type "file") (file-name-absolute-p raw-path))
+                 (concat "file:" raw-path))
                 (t raw-path)))
          protocol)
     (cond

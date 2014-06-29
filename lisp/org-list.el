@@ -1244,7 +1244,7 @@ some heuristics to guess the result."
 If POS is before first character after bullet of the item, the
 new item will be created before the current one.
 
-STRUCT is the list structure.  PREVS is the the alist of previous
+STRUCT is the list structure.  PREVS is the alist of previous
 items, as returned by `org-list-prevs-alist'.
 
 Insert a checkbox if CHECKBOX is non-nil, and string AFTER-BULLET
@@ -2227,7 +2227,7 @@ item is invisible."
 	  t)))))
 
 (defun org-list-repair ()
-  "Fix indentation, bullets and checkboxes is the list at point."
+  "Fix indentation, bullets and checkboxes in the list at point."
   (interactive)
   (unless (org-at-item-p) (error "This is not a list"))
   (let* ((struct (org-list-struct))
@@ -3044,7 +3044,7 @@ for this list."
     (unless (org-at-item-p) (error "Not at a list item"))
     (save-excursion
       (re-search-backward "#\\+ORGLST" nil t)
-      (unless (looking-at "#\\+ORGLST:[ \t]+SEND[ \t]+\\(\\S-+\\)[ \t]+\\(\\S-+\\)")
+      (unless (looking-at "\\(?:[ \t]\\)?#\\+ORGLST:[ \t]+SEND[ \t]+\\(\\S-+\\)[ \t]+\\(\\S-+\\)")
 	(if maybe (throw 'exit nil)
 	  (error "Don't know how to transform this list"))))
     (let* ((name (match-string 1))

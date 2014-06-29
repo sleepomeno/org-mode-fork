@@ -27,9 +27,8 @@
 
 ;;; Code:
 
-(require 'org-macs)
-
-(declare-function org-table-align "org-table" ())
+(declare-function org-toggle-pretty-entities "org"       ())
+(declare-function org-table-align            "org-table" ())
 
 (eval-when-compile
   (require 'cl))
@@ -403,6 +402,8 @@ packages to be loaded, add these packages to `org-latex-packages-alist'."
     ("rfloor" "\\rfloor" t "&rfloor;" "[right floor]" "[right floor]" "⌋")
     ("lang" "\\langle" t "&lang;" "<" "<" "⟨")
     ("rang" "\\rangle" t "&rang;" ">" ">" "⟩")
+    ("langle" "\\langle" t "&lang;" "<" "<" "⟨")
+    ("rangle" "\\rangle" t "&rang;" ">" ">" "⟩")
     ("hbar" "\\hbar" t "&hbar;" "hbar" "hbar" "ℏ")
     ("mho" "\\mho" t "&mho;" "mho" "mho" "℧")
 
@@ -568,6 +569,7 @@ Kind can be any of `latex', `html', `ascii', `latin1', or `utf8'."
     (goto-char pos)
     (org-table-align)))
 
+(defvar org-pretty-entities) ;; declare defcustom from org
 (defun org-entities-help ()
   "Create a Help buffer with all available entities."
   (interactive)

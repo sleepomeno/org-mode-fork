@@ -95,26 +95,15 @@ this variable.")
 
 (defun org-babel-expand-body:R (body params &optional graphics-file)
   "Expand BODY according to PARAMS, return the expanded body."
-  (let ((graphics-file
-	 (or graphics-file (org-babel-R-graphical-output-file params))))
-    (mapconcat
-     #'identity
-     (let ((inside
-            (append
-             (when (cdr (assoc :prologue params))
-               (list (cdr (assoc :prologue params))))
-             (org-babel-variable-assignments:R params)
-             (list body)
-             (when (cdr (assoc :epilogue params))
-               (list (cdr (assoc :epilogue params)))))))
-       (if graphics-file
-           (append
-            (list (org-babel-R-construct-graphics-device-call
-                   graphics-file params))
-            inside
-            (list "},error=function(e){plot(x=-1:1, y=-1:1, type='n', xlab='', ylab='', axes=FALSE); text(x=0, y=0, labels=e$message, col='red'); paste('ERROR', e$message, sep=' : ')}); dev.off()"))
-         inside))
-     "\n")))
+  (mapconcat 'identity
+	     (append
+	      (when (cdr (assoc :prologue params))
+		(list (cdr (assoc :prologue params))))
+	      (org-babel-variable-assignments:R params)
+	      (list body)
+	      (when (cdr (assoc :epilogue params))
+		(list (cdr (assoc :epilogue params)))))
+	     "\n"))
 
 (defun org-babel-execute:R (body params)
   "Execute a block of R code.
@@ -126,8 +115,20 @@ This function is called by `org-babel-execute-src-block'."
 		     (cdr (assoc :session params)) params))
 	   (colnames-p (cdr (assoc :colnames params)))
 	   (rownames-p (cdr (assoc :rownames params)))
-	   (graphics-file (org-babel-R-graphical-output-file params))
-	   (full-body (org-babel-expand-body:R body params graphics-file))
+	   (graphics-file (and (member "graphics" (assq :result-params params))
+			       (org-babel-graphical-output-file params)))
+	   (full-body
+	    (let ((inside
+		   (list (org-babel-expand-body:R body params graphics-file))))
+	      (mapconcat 'identity
+			 (if graphics-file
+			     (append
+			      (list (org-babel-R-construct-graphics-device-call
+				     graphics-file params))
+			      inside
+			      (list "},error=function(e){plot(x=-1:1, y=-1:1, type='n', xlab='', ylab='', axes=FALSE); text(x=0, y=0, labels=e$message, col='red'); paste('ERROR', e$message, sep=' : ')}); dev.off()"))
+			   inside)
+			 "\n")))
 	   (result
 	    (org-babel-R-evaluate
 	     session full-body result-type result-params
@@ -162,7 +163,7 @@ This function is called by `org-babel-execute-src-block'."
 
 (defun org-babel-variable-assignments:R (params)
   "Return list of R statements assigning the block's variables."
-  (let ((vars (mapcar #'cdr (org-babel-get-header params :var))))
+  (let ((vars (mapcar 'cdr (org-babel-get-header params :var))))
     (mapcar
      (lambda (pair)
        (org-babel-R-assign-elisp
@@ -187,12 +188,11 @@ This function is called by `org-babel-execute-src-block'."
 (defun org-babel-R-assign-elisp (name value colnames-p rownames-p)
   "Construct R code assigning the elisp VALUE to a variable named NAME."
   (if (listp value)
-      (let ((max (apply #'max (mapcar #'length (org-remove-if-not
-						#'sequencep value))))
-	    (min (apply #'min (mapcar #'length (org-remove-if-not
-						#'sequencep value))))
-	    (transition-file (org-babel-temp-file "R-import-")))
-        ;; ensure VALUE has an orgtbl structure (depth of at least 2)
+      (let* ((lengths (mapcar 'length (org-remove-if-not 'sequencep value)))
+	     (max (if lengths (apply 'max lengths) 0))
+	     (min (if lengths (apply 'min lengths) 0))
+	     (transition-file (org-babel-temp-file "R-import-")))
+        ;; Ensure VALUE has an orgtbl structure (depth of at least 2).
         (unless (listp (car value)) (setq value (list value)))
         (with-temp-file transition-file
           (insert
@@ -248,11 +248,6 @@ current code buffer."
   (setq ess-local-process-name
 	(process-name (get-buffer-process session)))
   (ess-make-buffer-current))
-
-(defun org-babel-R-graphical-output-file (params)
-  "Name of file to which R should send graphical output."
-  (and (member "graphics" (cdr (assq :result-params params)))
-       (cdr (assq :file params))))
 
 (defvar org-babel-R-graphics-devices
   '((:bmp "bmp" "filename")
@@ -373,7 +368,7 @@ last statement in BODY, as elisp."
 	column-names-p)))
     (output
      (mapconcat
-      #'org-babel-chomp
+      'org-babel-chomp
       (butlast
        (delq nil
 	     (mapcar
@@ -385,7 +380,7 @@ last statement in BODY, as elisp."
 		     (substring line (match-end 1))
 		   line))
 	       (org-babel-comint-with-output (session org-babel-R-eoe-output)
-		 (insert (mapconcat #'org-babel-chomp
+		 (insert (mapconcat 'org-babel-chomp
 				    (list body org-babel-R-eoe-indicator)
 				    "\n"))
 		 (inferior-ess-send-input)))))) "\n"))))

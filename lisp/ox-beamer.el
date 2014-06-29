@@ -231,14 +231,19 @@ Return overlay specification, as a string, or nil."
 	      (if a (org-beamer-export-to-pdf t s v b)
 		(org-open-file (org-beamer-export-to-pdf nil s v b)))))))
   :options-alist
-  '((:latex-class "LATEX_CLASS" nil "beamer" t)
+  '((:headline-levels nil "H" org-beamer-frame-level)
+    (:latex-class "LATEX_CLASS" nil "beamer" t)
+    (:beamer-column-view-format "COLUMNS" nil org-beamer-column-view-format)
     (:beamer-theme "BEAMER_THEME" nil org-beamer-theme)
     (:beamer-color-theme "BEAMER_COLOR_THEME" nil nil t)
     (:beamer-font-theme "BEAMER_FONT_THEME" nil nil t)
     (:beamer-inner-theme "BEAMER_INNER_THEME" nil nil t)
     (:beamer-outer-theme "BEAMER_OUTER_THEME" nil nil t)
     (:beamer-header-extra "BEAMER_HEADER" nil nil newline)
-    (:headline-levels nil "H" org-beamer-frame-level))
+    (:beamer-environments-extra nil nil org-beamer-environments-extra)
+    (:beamer-frame-default-options nil nil org-beamer-frame-default-options)
+    (:beamer-outline-frame-options nil nil org-beamer-outline-frame-options)
+    (:beamer-outline-frame-title nil nil org-beamer-outline-frame-title))
   :translate-alist '((bold . org-beamer-bold)
 		     (export-block . org-beamer-export-block)
 		     (export-snippet . org-beamer-export-snippet)
@@ -643,11 +648,11 @@ contextual information."
 		  (and (eq (org-element-type first-element) 'paragraph)
 		       (org-beamer--element-has-overlay-p first-element))))
 	(output (org-export-with-backend 'latex item contents info)))
-    (if (not action) output
+    (if (or (not action) (not (string-match "\\\\item" output))) output
       ;; If the item starts with a paragraph and that paragraph starts
       ;; with an export snippet specifying an overlay, insert it after
       ;; \item command.
-      (replace-regexp-in-string "\\\\item" (concat "\\\\item" action) output))))
+      (replace-match (concat "\\\\item" action) nil nil output))))
 
 
 ;;;; Keyword
@@ -689,8 +694,9 @@ used as a communication channel."
 	(when destination
 	  (format "\\hyperlink%s{%s}{%s}"
 		  (or (org-beamer--element-has-overlay-p link) "")
-		  (org-export-solidify-link-text path)
-		  (org-export-data (org-element-contents destination) info)))))
+		  (org-export-solidify-link-text
+		   (org-element-property :value destination))
+		  contents))))
      ((and (member type '("custom-id" "fuzzy" "id"))
 	   (let ((destination (if (string= type "fuzzy")
 				  (org-export-resolve-fuzzy-link link info)
@@ -1090,6 +1096,7 @@ aid, but the tag does not have any semantic meaning."
 			  envs)
 		  '((:endgroup))
 		  '(("BMCOL" . ?|))))
+	 (org-tag-persistent-alist nil)
 	 (org-use-fast-tag-selection t)
 	 (org-fast-tag-selection-single-key t))
     (org-set-tags)
@@ -1118,30 +1125,6 @@ aid, but the tag does not have any semantic meaning."
        (t (org-entry-delete nil "BEAMER_env"))))))
 
 ;;;###autoload
-(defun org-beamer-insert-options-template (&optional kind)
-  "Insert a settings template, to make sure users do this right."
-  (interactive (progn
-		 (message "Current [s]ubtree or [g]lobal?")
-		 (if (eq (read-char-exclusive) ?g) (list 'global)
-		   (list 'subtree))))
-  (if (eq kind 'subtree)
-      (progn
-	(org-back-to-heading t)
-	(org-reveal)
-	(org-entry-put nil "EXPORT_LaTeX_CLASS" "beamer")
-	(org-entry-put nil "EXPORT_LaTeX_CLASS_OPTIONS" "[presentation]")
-	(org-entry-put nil "EXPORT_FILE_NAME" "presentation.pdf")
-	(when org-beamer-column-view-format
-	  (org-entry-put nil "COLUMNS" org-beamer-column-view-format))
-	(org-entry-put nil "BEAMER_col_ALL" org-beamer-column-widths))
-    (insert "#+LaTeX_CLASS: beamer\n")
-    (insert "#+LaTeX_CLASS_OPTIONS: [presentation]\n")
-    (when org-beamer-theme (insert "#+BEAMER_THEME: " org-beamer-theme "\n"))
-    (when org-beamer-column-view-format
-      (insert "#+COLUMNS: " org-beamer-column-view-format "\n"))
-    (insert "#+PROPERTY: BEAMER_col_ALL " org-beamer-column-widths "\n")))
-
-;;;###autoload
 (defun org-beamer-publish-to-latex (plist filename pub-dir)
   "Publish an Org file to a Beamer presentation (LaTeX).
 
@@ -1165,7 +1148,9 @@ Return output file name."
   ;; working directory and then moved to publishing directory.
   (org-publish-attachment
    plist
-   (org-latex-compile (org-publish-org-to 'beamer filename ".tex" plist))
+   (org-latex-compile
+    (org-publish-org-to
+     'beamer filename ".tex" plist (file-name-directory filename)))
    pub-dir))
 
 

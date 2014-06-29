@@ -1,14 +1,9 @@
 \input texinfo
 @c %**start of header
-@setfilename ../../info/org
+@setfilename ../../info/org.info
 @settitle The Org Manual
 
 @include org-version.inc
-
-@c Use proper quote and backtick for code sections in PDF output
-@c Cf. Texinfo manual 14.2
-@set txicodequoteundirected
-@set txicodequotebacktick
 
 @c Version and Contact Info
 @set MAINTAINERSITE @uref{http://orgmode.org,maintainers web page}
@@ -868,7 +863,11 @@ We @b{strongly recommend} to stick to a single installation method.
 
 Recent Emacs distributions include a packaging system which lets you install
 Elisp libraries.  You can install Org with @kbd{M-x package-install RET org}.
-You need to do this in a session where no @code{.org} file has been visited.
+
+@noindent @b{Important}: you need to do this in a session where no @code{.org} file has
+been visited, i.e. where no Org built-in function have been loaded.
+Otherwise autoload Org functions will mess up the installation.
+
 Then, to make sure your Org configuration is taken into account, initialize
 the package system with @code{(package-initialize)} in your @file{.emacs}
 before setting any Org option.  If you want to use Org's package repository,
@@ -992,6 +991,8 @@ active region by using the mouse to select a region, or pressing
 
 If you find problems with Org, or if you have questions, remarks, or ideas
 about it, please mail to the Org mailing list @email{emacs-orgmode@@gnu.org}.
+You can subscribe to the list
+@uref{https://lists.gnu.org/mailman/listinfo/emacs-orgmode, on this web page}.
 If you are not a member of the mailing list, your mail will be passed to the
 list after a moderator has approved it@footnote{Please consider subscribing
 to the mailing list, in order to minimize the work the mailing list
@@ -1292,20 +1293,13 @@ Expose all the headings of the subtree, CONTENT view for just one subtree.
 Expose all direct children of the subtree.  With a numeric prefix argument N,
 expose all children down to level N@.
 @orgcmd{C-c C-x b,org-tree-to-indirect-buffer}
-Show the current subtree in an indirect buffer@footnote{The indirect
-buffer
-@ifinfo
-(@pxref{Indirect Buffers,,,emacs,GNU Emacs Manual})
-@end ifinfo
-@ifnotinfo
-(see the Emacs manual for more information about indirect buffers)
-@end ifnotinfo
-will contain the entire buffer, but will be narrowed to the current
-tree.  Editing the indirect buffer will also change the original buffer,
-but without affecting visibility in that buffer.}.  With a numeric
-prefix argument N, go up to level N and then take that tree.  If N is
-negative then go up that many levels.  With a @kbd{C-u} prefix, do not remove
-the previously used indirect buffer.
+Show the current subtree in an indirect buffer@footnote{The indirect buffer
+(@pxref{Indirect Buffers,,,emacs,GNU Emacs Manual}) will contain the entire
+buffer, but will be narrowed to the current tree.  Editing the indirect
+buffer will also change the original buffer, but without affecting visibility
+in that buffer.}.  With a numeric prefix argument N, go up to level N and
+then take that tree.  If N is negative then go up that many levels.  With a
+@kbd{C-u} prefix, do not remove the previously used indirect buffer.
 @orgcmd{C-c C-x v,org-copy-visible}
 Copy the @i{visible} text in the region into the kill ring.
 @end table
@@ -1325,7 +1319,7 @@ When Emacs first visits an Org file, the global state is set to OVERVIEW,
 i.e., only the top level headlines are visible@footnote{When
 @code{org-agenda-inhibit-startup} is non-@code{nil}, Org will not honor the default
 visibility state when first opening a file for the agenda (@pxref{Speeding up
-your agendas}).}  This can be configured through the variable
+your agendas}).}.  This can be configured through the variable
 @code{org-startup-folded}, or on a per-file basis by adding one of the
 following lines anywhere in the buffer:
 
@@ -1422,19 +1416,23 @@ See also the option @code{org-goto-interface}.
 @orgcmd{M-@key{RET},org-insert-heading}
 @vindex org-M-RET-may-split-line
 Insert a new heading/item with the same level as the one at point.
-If the cursor is in a plain list item, a new item is created
-(@pxref{Plain lists}).  To prevent this behavior in lists, call the
-command with a prefix argument.  When this command is used in the
-middle of a line, the line is split and the rest of the line becomes
-the new item or headline@footnote{If you do not want the line to be
-split, customize the variable @code{org-M-RET-may-split-line}.}.  If
-the command is used at the @emph{beginning} of a headline, the new
-headline is created before the current line.  If the command is used
-at the @emph{end} of a folded subtree (i.e., behind the ellipses at
-the end of a headline), then a headline will be
-inserted after the end of the subtree.  Calling this command with
-@kbd{C-u C-u} will unconditionally respect the headline's content and
-create a new item at the end of the parent subtree.
+
+If the cursor is in a plain list item, a new item is created (@pxref{Plain
+lists}).  To prevent this behavior in lists, call the command with one prefix
+argument.  When this command is used in the middle of a line, the line is
+split and the rest of the line becomes the new item or headline.  If you do
+not want the line to be split, customize @code{org-M-RET-may-split-line}.
+
+If the command is used at the @emph{beginning} of a line, and if there is a
+heading or an item at point, the new heading/item is created @emph{before}
+the current line.  If the command is used at the @emph{end} of a folded
+subtree (i.e., behind the ellipses at the end of a headline), then a headline
+will be inserted after the end of the subtree.
+
+Calling this command with @kbd{C-u C-u} will unconditionally respect the
+headline's content and create a new item at the end of the parent subtree.
+
+If point is at the beginning of a normal line, turn this line into a heading.
 @orgcmd{C-@key{RET},org-insert-heading-respect-content}
 Just like @kbd{M-@key{RET}}, except when adding a new heading below the
 current heading, the new heading is placed after the body instead of before
@@ -2720,9 +2718,11 @@ Operations, , Logical Operations, calc, GNU Emacs Calc Manual}).  For example
 @item if($1 < 20, teen, string(""))
 "teen" if age $1 is less than 20, else the Org table result field is set to
 empty with the empty string.
-@item if("$1" == "nan" || "$2" == "nan", string(""), $1 + $2); E
+@item if("$1" == "nan" || "$2" == "nan", string(""), $1 + $2); E f-1
 Sum of the first two columns.  When at least one of the input fields is empty
-the Org table result field is set to empty.
+the Org table result field is set to empty.  @samp{E} is required to not
+convert empty fields to 0.  @samp{f-1} is an optional Calc format string
+similar to @samp{%.1f} but leaves empty results empty.
 @item if(typeof(vmean($1..$7)) == 12, string(""), vmean($1..$7); E
 Mean value of a range unless there is any empty field.  Every field in the
 range that is empty is replaced by @samp{nan} which lets @samp{vmean} result
@@ -5168,7 +5168,7 @@ first, and the value after it.  Here is an example:
 @end example
 
 Depending on the value of @code{org-use-property-inheritance}, a property set
-this way will either be associated with a single entry, or the sub-tree
+this way will either be associated with a single entry, or the subtree
 defined by the entry, see @ref{Property inheritance}.
 
 You may define the allowed values for a particular property @samp{:Xyz:}
@@ -5523,6 +5523,9 @@ estimated at 0.5 to 2 days of work.  Straight addition produces an estimate
 of 5 to 20 days, representing what to expect if everything goes either
 extremely well or extremely poorly.  In contrast, @code{est+} estimates the
 full job more realistically, at 10--15 days.
+
+Numbers are right-aligned when a format specifier with an explicit width like
+@code{%5d} or @code{%5.1f} is used.
 
 Here is an example for a complete columns definition, along with allowed
 values.
@@ -6535,6 +6538,8 @@ but you can specify your own function using the @code{:formatter} parameter.
 :tcolumns    @r{Number of columns to be used for times.  If this is smaller}
              @r{than @code{:maxlevel}, lower levels will be lumped into one column.}
 :level       @r{Should a level number column be included?}
+:sort        @r{A cons cell like containing the column to sort and a sorting type.}
+             @r{E.g., @code{:sort (1 . ?a)} sorts the first column alphabetically.}
 :compact     @r{Abbreviation for @code{:level nil :indent t :narrow 40! :tcolumns 1}}
              @r{All are overwritten except if there is an explicit @code{:narrow}}
 :timestamp   @r{A timestamp for the entry, when available.  Look for SCHEDULED,}
@@ -7097,9 +7102,10 @@ narrow it so that you only see the new material.
 
 @item :table-line-pos
 Specification of the location in the table where the new line should be
-inserted.  It should be a string like @code{"II-3"} meaning that the new
-line should become the third line before the second horizontal separator
-line.
+inserted. It can be a string, a variable holding a string or a function
+returning a string. The string should look like @code{"II-3"} meaning that
+the new line should become the third line before the second horizontal
+separator line.
 
 @item :kill-buffer
 If the target file was not yet visited when capture was invoked, kill the
@@ -7738,15 +7744,17 @@ current region/subtree.}.  After pressing @kbd{< <}, you still need to press the
 character selecting the command.
 
 @item *
+@cindex agenda, sticky
 @vindex org-agenda-sticky
 Toggle sticky agenda views.  By default, Org maintains only a single agenda
 buffer and rebuilds it each time you change the view, to make sure everything
-is always up to date.  If you switch between views often and the build time
-bothers you, you can turn on sticky agenda buffers (make this the default by
-customizing the variable @code{org-agenda-sticky}).  With sticky agendas, the
-dispatcher only switches to the selected view, you need to update it by hand
-with @kbd{r} or @kbd{g}.  You can toggle sticky agenda view any time with
-@code{org-toggle-sticky-agenda}.
+is always up to date.  If you often switch between agenda views and the build
+time bothers you, you can turn on sticky agenda buffers or make this the
+default by customizing the variable @code{org-agenda-sticky}.  With sticky
+agendas, the agenda dispatcher will not recreate agenda views from scratch,
+it will only switch to the selected one, and you need to update the agenda by
+hand with @kbd{r} or @kbd{g} when needed.  You can toggle sticky agenda view
+any time with @code{org-toggle-sticky-agenda}.
 @end table
 
 You can also define custom commands that will be accessible through the
@@ -8430,24 +8438,6 @@ will be narrowed by requiring or forbidding the selected additional tag.
 Instead of pressing @kbd{+} or @kbd{-} after @kbd{/}, you can also
 immediately use the @kbd{\} command.
 
-@vindex org-sort-agenda-noeffort-is-high
-In order to filter for effort estimates, you should set up allowed
-efforts globally, for example
-@lisp
-(setq org-global-properties
-    '(("Effort_ALL". "0 0:10 0:30 1:00 2:00 3:00 4:00")))
-@end lisp
-You can then filter for an effort by first typing an operator, one of
-@kbd{<}, @kbd{>}, and @kbd{=}, and then the one-digit index of an effort
-estimate in your array of allowed values, where @kbd{0} means the 10th value.
-The filter will then restrict to entries with effort smaller-or-equal, equal,
-or larger-or-equal than the selected value.  If the digits 0--9 are not used
-as fast access keys to tags, you can also simply press the index digit
-directly without an operator.  In this case, @kbd{<} will be assumed.  For
-application of the operator, entries without a defined effort will be treated
-according to the value of @code{org-sort-agenda-noeffort-is-high}.  To filter
-for tasks without effort definition, press @kbd{?} as the operator.
-
 Org also supports automatic, context-aware tag filtering.  If the variable
 @code{org-agenda-auto-exclude-function} is set to a user-defined function,
 that function can decide which tags should be excluded from the agenda
@@ -8518,6 +8508,23 @@ universal prefix arguments, it will remove all the regexp filters, which can
 be accumulated.  You can add a filter preset through the option
 @code{org-agenda-category-filter-preset} (see below.)
 
+@orgcmd{_,org-agenda-filter-by-effort}
+@vindex org-agenda-effort-filter-preset
+@vindex org-sort-agenda-noeffort-is-high
+Filter the agenda view with respect to effort estimates.  
+You first need to set up allowed efforts globally, for example
+@lisp
+(setq org-global-properties
+    '(("Effort_ALL". "0 0:10 0:30 1:00 2:00 3:00 4:00")))
+@end lisp
+You can then filter for an effort by first typing an operator, one of
+@kbd{<}, @kbd{>}, and @kbd{=}, and then the one-digit index of an effort
+estimate in your array of allowed values, where @kbd{0} means the 10th value.
+The filter will then restrict to entries with effort smaller-or-equal, equal,
+or larger-or-equal than the selected value.  For application of the operator,
+entries without a defined effort will be treated according to the value of
+@code{org-sort-agenda-noeffort-is-high}.
+
 @orgcmd{|,org-agenda-filter-remove-all}
 Remove all filters in the current agenda view.
 @end table
@@ -8563,8 +8570,8 @@ Once you mark one of these five entry as @code{DONE}, rebuilding the agenda
 will again the next five entries again, including the first entry that was
 excluded so far.
 
-You can also dynamically set temporary limits@footnote{Those temporary limits
-are lost when rebuilding the agenda.}:
+You can also dynamically set temporary limits, which will be lost when
+rebuilding the agenda:
 
 @table @kbd
 @orgcmd{~,org-agenda-limit-interactively}
@@ -8592,6 +8599,10 @@ the other commands, the cursor needs to be in the desired line.
 Next line (same as @key{down} and @kbd{C-n}).
 @orgcmd{p,org-agenda-previous-line}
 Previous line (same as @key{up} and @kbd{C-p}).
+@orgcmd{N,org-agenda-next-item}
+Next item: same as next line, but only consider items.
+@orgcmd{P,org-agenda-previous-item}
+Previous item: same as previous line, but only consider items.
 @tsubheading{View/Go to Org file}
 @orgcmdkkc{@key{SPC},mouse-3,org-agenda-show-and-scroll-up}
 Display the original location of the item in another window.
@@ -9726,8 +9737,8 @@ multiple footnotes side by side.
 @vindex org-fontify-emphasized-text
 @vindex org-emphasis-regexp-components
 @vindex org-emphasis-alist
-You can make words @b{*bold*}, @i{/italic/}, _underlined_, @code{=code=}
-and @code{~verbatim~}, and, if you must, @samp{+strike-through+}.  Text
+You can make words @b{*bold*}, @i{/italic/}, _underlined_, @code{=verbatim=}
+and @code{~code~}, and, if you must, @samp{+strike-through+}.  Text
 in the code and verbatim string is not processed for Org mode specific
 syntax, it is exported verbatim.
 
@@ -9752,15 +9763,21 @@ a horizontal line.
 @cindex #+BEGIN_COMMENT
 
 Lines starting with zero or more whitespace characters followed by one
-@samp{#} and a whitespace are treated as comments and will never be exported.
-Also entire subtrees starting with the word @samp{COMMENT} will never be
-exported.  Finally, regions surrounded by @samp{#+BEGIN_COMMENT}
-... @samp{#+END_COMMENT} will not be exported.
+@samp{#} and a whitespace are treated as comments and, as such, are not
+exported.
+
+Likewise, regions surrounded by @samp{#+BEGIN_COMMENT}
+... @samp{#+END_COMMENT} are not exported.
+
+Finally, a @samp{COMMENT} keyword at the beginning of an entry, but after any
+other keyword or priority cookie, comments out the entire subtree.  In this
+case, the subtree is not exported and no code block within it is executed
+either.  The command below helps changing the comment status of a headline.
 
 @table @kbd
 @kindex C-c ;
 @item C-c ;
-Toggle the COMMENT keyword at the beginning of an entry.
+Toggle the @samp{COMMENT} keyword at the beginning of an entry.
 @end table
 
 
@@ -9840,6 +9857,7 @@ Here is an example
 @end example
 
 @cindex formatting source code, markup rules
+@vindex org-latex-listings
 If the example is source code from a programming language, or any other text
 that can be marked up by font-lock in Emacs, you can ask for the example to
 look like the fontified Emacs buffer@footnote{This works automatically for
@@ -9891,6 +9909,10 @@ In line [[(sc)]] we remember the current position.  [[(jump)][Line (jump)]]
 jumps to point-min.
 @end example
 
+@cindex indentation, in source blocks
+Finally, you can use @code{-i} to preserve the indentation of a specific code
+block (@pxref{Editing source code}).
+
 @vindex org-coderef-label-format
 If the syntax for the label format conflicts with the language syntax, use a
 @code{-l} switch to change the format, for example @samp{#+BEGIN_SRC pascal
@@ -9941,28 +9963,37 @@ include your @file{.emacs} file, you could use:
 @end example
 
 @noindent
-The optional second and third parameter are the markup (e.g., @samp{quote},
-@samp{example}, or @samp{src}), and, if the markup is @samp{src}, the
-language for formatting the contents.  The markup is optional; if it is not
-given, the text will be assumed to be in Org mode format and will be
-processed normally.
+The first parameter names the the file to include.  The optional second and
+third parameter specify the markup (i.e., @samp{example} or @samp{src}), and,
+if the markup is @samp{src}, the language for formatting the contents.
 
-Contents of the included file will belong to the same structure (headline,
-item) containing the @code{INCLUDE} keyword.  In particular, headlines within
-the file will become children of the current section.  That behavior can be
-changed by providing an additional keyword parameter, @code{:minlevel}.  In
-that case, all headlines in the included file will be shifted so the one with
-the lowest level reaches that specified level.  For example, to make a file
-become a sibling of the current top-level headline, use
+If markup is requested, the included content will be placed within an
+appropriate block@footnote{While you can request paragraphs (@samp{verse},
+@samp{quote}, @samp{center}), but this places severe restrictions on the type
+of content that is permissible}.  No changes to the included content are made
+and it is the responsibility of the user to ensure that the result is valid
+Org syntax.  For markup @samp{example} and @samp{src}, which is requesting a
+literal example, the content will be code-escaped before inclusion.
+
+If no markup is requested, the text will be assumed to be in Org mode format
+and will be processed normally.  However, footnote labels (@pxref{Footnotes})
+in the file will be made local to that file.  Contents of the included file
+will belong to the same structure (headline, item) containing the
+@code{INCLUDE} keyword.  In particular, headlines within the file will become
+children of the current section.  That behavior can be changed by providing
+an additional keyword parameter, @code{:minlevel}.  In that case, all
+headlines in the included file will be shifted so the one with the lowest
+level reaches that specified level.  For example, to make a file become a
+sibling of the current top-level headline, use
 
 @example
 #+INCLUDE: "~/my-book/chapter2.org" :minlevel 1
 @end example
 
 You can also include a portion of a file by specifying a lines range using
-the @code{:lines} parameter.  The line at the upper end of the range will not
-be included.  The start and/or the end of the range may be omitted to use the
-obvious defaults.
+the @code{:lines} keyword parameter.  The line at the upper end of the range
+will not be included.  The start and/or the end of the range may be omitted
+to use the obvious defaults.
 
 @example
 #+INCLUDE: "~/.emacs" :lines "5-10"   @r{Include lines 5 to 10, 10 excluded}
@@ -10005,15 +10036,22 @@ You can define text snippets with
 #+MACRO: name   replacement text $1, $2 are arguments
 @end example
 
-@noindent which can be referenced in
-paragraphs, verse blocks, table cells and some keywords with
-@code{@{@{@{name(arg1,arg2)@}@}@}}@footnote{Since commas separate arguments,
+@noindent which can be referenced
+@code{@{@{@{name(arg1, arg2)@}@}@}}@footnote{Since commas separate arguments,
 commas within arguments have to be escaped with a backslash character.
 Conversely, backslash characters before a comma, and only them, need to be
-escaped with another backslash character.}.  In addition to defined macros,
-@code{@{@{@{title@}@}@}}, @code{@{@{@{author@}@}@}}, etc., will reference
-information set by the @code{#+TITLE:}, @code{#+AUTHOR:}, and similar lines.
-Also, @code{@{@{@{time(@var{FORMAT})@}@}@}} and
+escaped with another backslash character.}.
+
+These references, called macros, can be inserted anywhere Org markup is
+recognized: paragraphs, headlines, verse and example blocks, tables cells,
+lists and comments.  They cannot be used within ordinary keywords (starting
+with @code{#+:}) but are allowed in @code{#+CAPTION}, @code{#+TITLE},
+@code{#+AUTHOR} and @code{#+EMAIL}.
+
+In addition to user-defined macros, a set of already defined macros can be
+used: @code{@{@{@{title@}@}@}}, @code{@{@{@{author@}@}@}}, etc., will
+reference information set by the @code{#+TITLE:}, @code{#+AUTHOR:}, and
+similar lines.  Also, @code{@{@{@{time(@var{FORMAT})@}@}@}} and
 @code{@{@{@{modification-time(@var{FORMAT})@}@}@}} refer to current date time
 and to the modification time of the file being exported, respectively.
 @var{FORMAT} should be a format string understood by
@@ -10134,19 +10172,13 @@ format sub- and superscripts in a WYSIWYM way.
 Going beyond symbols and sub- and superscripts, a full formula language is
 needed.  Org mode can contain @LaTeX{} math fragments, and it supports ways
 to process these for several export back-ends.  When exporting to @LaTeX{},
-the code is obviously left as it is.  When exporting to HTML, Org invokes the
-@uref{http://www.mathjax.org, MathJax library} (@pxref{Math formatting in
+the code is obviously left as it is.  When exporting to HTML, Org can invoke
+the @uref{http://www.mathjax.org, MathJax library} (@pxref{Math formatting in
 HTML export}) to process and display the math@footnote{If you plan to use
 this regularly or on pages with significant page views, you should install
 @file{MathJax} on your own server in order to limit the load of our server.}.
-Finally, it can also process the mathematical expressions into
-images@footnote{For this to work you need to be on a system with a working
-@LaTeX{} installation.  You also need the @file{dvipng} program or the
-@file{convert}, respectively available at
-@url{http://sourceforge.net/projects/dvipng/} and from the @file{imagemagick}
-suite.  The @LaTeX{} header that will be used when processing a fragment can
-be configured with the variable @code{org-format-latex-header}.} that can be
-displayed in a browser.
+It can also process the mathematical expressions into images that can be
+displayed in a browser (see @pxref{Previewing @LaTeX{} fragments}).
 
 @LaTeX{} fragments don't need any special marking at all.  The following
 snippets will be identified as @LaTeX{} source code:
@@ -10204,11 +10236,21 @@ lines:
 @cindex @LaTeX{} fragments, preview
 
 @vindex org-latex-create-formula-image-program
-If you have @file{dvipng} or @file{imagemagick} installed@footnote{Choose the
-converter by setting the variable
+If you have a working @LaTeX{} installation and either @file{dvipng} or
+@file{convert} installed@footnote{These are respectively available at
+@url{http://sourceforge.net/projects/dvipng/} and from the @file{imagemagick}
+suite. Choose the converter by setting the variable
 @code{org-latex-create-formula-image-program} accordingly.}, @LaTeX{}
-fragments can be processed to produce preview images of the typeset
-expressions:
+fragments can be processed to produce images of the typeset expressions to be
+used for inclusion while exporting to HTML (see @pxref{@LaTeX{} fragments}),
+or for inline previewing within Org mode.
+
+@vindex org-format-latex-options
+@vindex org-format-latex-header
+You can customize the variables @code{org-format-latex-options} and
+@code{org-format-latex-header} to influence some aspects of the preview.  In
+particular, the @code{:scale} (and for HTML export, @code{:html-scale})
+property of the former can be used to adjust the size of the preview images.
 
 @table @kbd
 @kindex C-c C-x C-l
@@ -10223,12 +10265,6 @@ process the entire buffer.
 @item C-c C-c
 Remove the overlay preview images.
 @end table
-
-@vindex org-format-latex-options
-You can customize the variable @code{org-format-latex-options} to influence
-some aspects of the preview.  In particular, the @code{:scale} (and for HTML
-export, @code{:html-scale}) property can be used to adjust the size of the
-preview images.
 
 @vindex org-startup-with-latex-preview
 You can turn on the previewing of all @LaTeX{} fragments in a file with
@@ -10400,10 +10436,10 @@ export dispatcher with the following key combinations:
 Toggle asynchronous export.  Asynchronous export uses an external Emacs
 process that is configured with a specified initialization file.
 
-While exporting asynchronously, the output is not displayed.  It is stored in
-a list called ``the export stack'', and can be viewed from there.  The stack
-can be reached by calling the dispatcher with a double @kbd{C-u} prefix
-argument, or with @kbd{&} key from the dispatcher.
+While exporting asynchronously, the output is not displayed, but stored in
+a place called ``the export stack''.  This stack can be displayed by calling
+the dispatcher with a double @kbd{C-u} prefix argument, or with @kbd{&} key
+from the dispatcher menu.
 
 @vindex org-export-in-background
 To make this behavior the default, customize the variable
@@ -10424,13 +10460,7 @@ You can change the default state of this option by setting
 @item C-v
 Toggle visible-only export.  Only export the text that is currently
 visible, i.e. not hidden by outline visibility in the buffer.
-
 @end table
-
-@vindex org-export-copy-to-kill-ring
-With the exception of asynchronous export, a successful export process writes
-its output to the kill-ring. You can configure this behavior by altering the
-option @code{org-export-copy-to-kill-ring}.
 
 @node Export back-ends
 @section Export back-ends
@@ -10545,7 +10575,8 @@ anywhere in a file, text before the first headline is ignored.
 The tags that exclude a tree from export (@code{org-export-exclude-tags}).
 The default value is @code{:noexport:}.  Entries with the @code{:noexport:}
 tag will be unconditionally excluded from the export, even if they have an
-@code{:export:} tag.
+@code{:export:} tag.  Code blocks contained in excluded subtrees will still
+be executed during export even though the subtree is not exported.
 
 @item TITLE
 @cindex #+TITLE
@@ -10728,6 +10759,10 @@ ASCII export produces a simple and very readable version of an Org mode
 file, containing only plain ASCII@.  Latin-1 and UTF-8 export augment the file
 with special characters and symbols available in these encodings.
 
+@vindex org-ascii-text-width
+Upon exporting, text is filled and justified, when appropriate, according the
+text width set in @code{org-ascii-text-width}.
+
 @vindex org-ascii-links-to-notes
 Links are exported in a footnote-like style, with the descriptive part in the
 text and the link in a note before the next heading.  See the variable
@@ -10780,6 +10815,25 @@ specified using an @code{ATTR_ASCII} line, directly preceding the rule.
 @example
 #+ATTR_ASCII: :width 10
 -----
+@end example
+
+@subheading ASCII special blocks
+@cindex special blocks, in ASCII export
+@cindex #+BEGIN_JUSTIFYLEFT
+@cindex #+BEGIN_JUSTIFYRIGHT
+
+In addition to @code{#+BEGIN_CENTER} blocks (@pxref{Paragraphs}), it is
+possible to justify contents to the left or the right of the page with the
+following dedicated blocks.
+
+@example
+#+BEGIN_JUSTIFYLEFT
+It's just a jump to the left...
+#+END_JUSTIFYLEFT
+
+#+BEGIN_JUSTIFYRIGHT
+...and then a step to the right.
+#+END_JUSTIFYRIGHT
 @end example
 
 @node Beamer export
@@ -10955,11 +11009,6 @@ In @code{org-beamer-mode}, this key offers fast selection of a Beamer
 environment or the @code{BEAMER_COL} property.
 @end table
 
-Also, a template for useful in-buffer settings or properties can be inserted
-into the buffer with @kbd{M-x org-beamer-insert-options-template}.  Among
-other things, this will install a column view format which is very handy for
-editing special properties used by Beamer.
-
 @subheading An example
 
 Here is a simple example Org document that is intended for Beamer export.
@@ -10967,7 +11016,7 @@ Here is a simple example Org document that is intended for Beamer export.
 @smallexample
 #+TITLE: Example Presentation
 #+AUTHOR: Carsten Dominik
-#+OPTIONS: H:2
+#+OPTIONS: H:2 toc:t num:t
 #+LATEX_CLASS: beamer
 #+LATEX_CLASS_OPTIONS: [presentation]
 #+BEAMER_THEME: Madrid
@@ -10976,20 +11025,20 @@ Here is a simple example Org document that is intended for Beamer export.
 * This is the first structural section
 
 ** Frame 1
-*** Thanks to Eric Fraga                                           :B_block:BMCOL:
+*** Thanks to Eric Fraga                                           :B_block:
     :PROPERTIES:
     :BEAMER_COL: 0.48
     :BEAMER_ENV: block
     :END:
     for the first viable Beamer setup in Org
-*** Thanks to everyone else                                        :B_block:BMCOL:
+*** Thanks to everyone else                                        :B_block:
     :PROPERTIES:
     :BEAMER_COL: 0.48
     :BEAMER_ACT: <2->
     :BEAMER_ENV: block
     :END:
     for contributing to the discussion
-**** This will be formatted as a beamer note                              :B_note:
+**** This will be formatted as a beamer note                       :B_note:
      :PROPERTIES:
      :BEAMER_env: note
      :END:
@@ -11236,10 +11285,39 @@ individual tables, place something like the following before the table:
 #+ATTR_HTML: :border 2 :rules all :frame border
 @end example
 
+You can also group columns in the HTML output (@pxref{Column groups}).
+
+Below is a list of options for customizing tables HTML export.
+
+@table @code
+@vindex org-html-table-align-individual-fields
+@item org-html-table-align-individual-fields
+Non-nil means attach style attributes for alignment to each table field.
+
+@vindex org-html-table-caption-above
+@item org-html-table-caption-above
+When non-nil, place caption string at the beginning of the table.
+
+@vindex org-html-table-data-tags
+@item org-html-table-data-tags
+The opening and ending tags for table data fields.
+
+@vindex org-html-table-default-attributes
+@item org-html-table-default-attributes
+Default attributes and values which will be used in table tags.
+
+@vindex org-html-table-header-tags
+@item org-html-table-header-tags
+The opening and ending tags for table header fields.
+
 @vindex org-html-table-row-tags
-You can also modify the default tags used for each row by setting
-@code{org-html-table-row-tags}.  See the docstring for an example on
-how to use this option.
+@item org-html-table-row-tags
+The opening and ending tags for table rows.
+
+@vindex org-html-table-use-header-tags-for-first-column
+@item org-html-table-use-header-tags-for-first-column
+Non-nil means format column one in tables with header tags.
+@end table
 
 @node Images in HTML export
 @subsection Images in HTML export
@@ -11654,10 +11732,13 @@ task, you can use @code{:caption} attribute instead.  Its value should be raw
 @LaTeX{} code.  It has precedence over @code{#+CAPTION}.
 @item :float
 @itemx :placement
-Float environment for the table.  Possible values are @code{sidewaystable},
+The @code{:float} specifies the float environment for the table.  Possible
+values are @code{sideways}@footnote{Formerly, the value was
+@code{sidewaystable}.  This is deprecated since Org 8.3.},
 @code{multicolumn}, @code{t} and @code{nil}.  When unspecified, a table with
-a caption will have a @code{table} environment.  Moreover, @code{:placement}
-attribute can specify the positioning of the float.
+a caption will have a @code{table} environment.  Moreover, the
+@code{:placement} attribute can specify the positioning of the float.  Note:
+@code{:placement} is ignored for @code{:float sideways} tables.
 @item :align
 @itemx :font
 @itemx :width
@@ -11760,6 +11841,11 @@ environment.
 @code{wrap}: if you would like to let text flow around the image.  It will
 make the figure occupy the left half of the page.
 @item
+@code{sideways}: if you would like the image to appear alone on a separate
+page rotated ninety degrees using the @code{sidewaysfigure}
+environment.  Setting this @code{:float} option will ignore the
+@code{:placement} setting.
+@item
 @code{nil}: if you need to avoid any floating environment, even when
 a caption is provided.
 @end itemize
@@ -11792,8 +11878,10 @@ that environment.
 @cindex source blocks, in @LaTeX{} export
 
 In addition to syntax defined in @ref{Literal examples}, names and captions
-(@pxref{Images and tables}), source blocks also accept a @code{:float}
-attribute.  You may set it to:
+(@pxref{Images and tables}), source blocks also accept two additional
+attributes: @code{:float} and @code{:options}.
+
+You may set the former to
 @itemize @minus
 @item
 @code{t}: if you want to make the source block a float.  It is the default
@@ -11810,6 +11898,21 @@ is provided.  It is useful for source code that may not fit in a single page.
 #+ATTR_LATEX: :float nil
 #+BEGIN_SRC emacs-lisp
 Code that may not fit in a single page.
+#+END_SRC
+@end example
+
+@vindex org-latex-listings-options
+@vindex org-latex-minted-options
+The latter allows to specify options relative to the package used to
+highlight code in the output (e.g., @code{listings}).  This is the local
+counterpart to @code{org-latex-listings-options} and
+@code{org-latex-minted-options} variables, which see.
+
+@example
+#+ATTR_LATEX: :options commentstyle=\bfseries
+#+BEGIN_SRC emacs-lisp
+  (defun Fib (n)                          ; Count rabbits.
+    (if (< n 2) n (+ (Fib (- n 1)) (Fib (- n 2)))))
 #+END_SRC
 @end example
 
@@ -12238,7 +12341,7 @@ height:width ratio, do the following
 @cindex #+ATTR_ODT
 You can control the manner in which an image is anchored by setting the
 @code{:anchor} property of it's @code{#+ATTR_ODT} line.  You can specify one
-of the the following three values for the @code{:anchor} property:
+of the following three values for the @code{:anchor} property:
 @samp{"as-char"}, @samp{"paragraph"} and @samp{"page"}.
 
 To create an image that is anchored to a page, do the following:
@@ -13320,48 +13423,27 @@ result into the destination folder.
 @subsection Options for the exporters
 @cindex options, for publishing
 
-The property list can be used to set many export options for the exporters.
-In most cases, these properties correspond to user variables in Org.  The
-first table below lists these properties along with the variable they belong
-to.  The second table list HTML specific properties.  See the documentation
-string of these options for details.
+The property list can be used to set export options during the publishing
+process.  In most cases, these properties correspond to user variables in
+Org.  While some properties are available for all export back-ends, most of
+them are back-end specific.  The following sections list properties along
+with the variable they belong to.  See the documentation string of these
+options for details.
 
-@vindex org-display-custom-times
-@vindex org-export-default-language
-@vindex org-export-exclude-tags
-@vindex org-export-headline-levels
-@vindex org-export-preserve-breaks
-@vindex org-export-publishing-directory
-@vindex org-export-select-tags
-@vindex org-export-with-archived-trees
-@vindex org-export-with-author
-@vindex org-export-with-creator
-@vindex org-export-with-drawers
-@vindex org-export-with-email
-@vindex org-export-with-emphasize
-@vindex org-export-with-fixed-width
-@vindex org-export-with-footnotes
-@vindex org-export-with-latex
-@vindex org-export-with-planning
-@vindex org-export-with-priority
-@vindex org-export-with-properties
-@vindex org-export-with-section-numbers
-@vindex org-export-with-special-strings
-@vindex org-export-with-sub-superscripts
-@vindex org-export-with-tables
-@vindex org-export-with-tags
-@vindex org-export-with-tasks
-@vindex org-export-with-timestamps
-@vindex org-export-with-toc
-@vindex org-export-with-todo-keywords
-@vindex user-mail-address
-@multitable @columnfractions 0.32 0.68
+@vindex org-publish-project-alist
+When a property is given a value in @code{org-publish-project-alist}, its
+setting overrides the value of the corresponding user variable (if any)
+during publishing.  Options set within a file (@pxref{Export settings}),
+however, override everything.
+
+@subsubheading Generic properties
+
+@multitable {@code{:with-sub-superscript}}  {@code{org-export-with-sub-superscripts}}
 @item @code{:archived-trees}        @tab @code{org-export-with-archived-trees}
 @item @code{:exclude-tags}          @tab @code{org-export-exclude-tags}
 @item @code{:headline-levels}       @tab @code{org-export-headline-levels}
 @item @code{:language}              @tab @code{org-export-default-language}
 @item @code{:preserve-breaks}       @tab @code{org-export-preserve-breaks}
-@item @code{:publishing-directory}  @tab @code{org-export-publishing-directory}
 @item @code{:section-numbers}       @tab @code{org-export-with-section-numbers}
 @item @code{:select-tags}           @tab @code{org-export-select-tags}
 @item @code{:with-author}           @tab @code{org-export-with-author}
@@ -13385,53 +13467,197 @@ string of these options for details.
 @item @code{:with-todo-keywords}    @tab @code{org-export-with-todo-keywords}
 @end multitable
 
-@vindex org-html-doctype
-@vindex org-html-container-element
-@vindex org-html-html5-fancy
-@vindex org-html-xml-declaration
-@vindex org-html-link-up
-@vindex org-html-link-home
-@vindex org-html-link-org-files-as-html
-@vindex org-html-link-use-abs-url
-@vindex org-html-head
-@vindex org-html-head-extra
-@vindex org-html-inline-images
-@vindex org-html-extension
-@vindex org-html-preamble
-@vindex org-html-postamble
-@vindex org-html-table-default-attributes
-@vindex org-html-table-row-tags
-@vindex org-html-head-include-default-style
-@vindex org-html-head-include-scripts
-@multitable @columnfractions 0.32 0.68
-@item @code{:html-doctype}          @tab @code{org-html-doctype}
-@item @code{:html-container}        @tab @code{org-html-container-element}
-@item @code{:html-html5-fancy}      @tab @code{org-html-html5-fancy}
-@item @code{:html-xml-declaration}  @tab @code{org-html-xml-declaration}
-@item @code{:html-link-up}          @tab @code{org-html-link-up}
-@item @code{:html-link-home}        @tab @code{org-html-link-home}
-@item @code{:html-link-org-as-html} @tab @code{org-html-link-org-files-as-html}
-@item @code{:html-link-use-abs-url} @tab @code{org-html-link-use-abs-url}
-@item @code{:html-head}             @tab @code{org-html-head}
-@item @code{:html-head-extra}       @tab @code{org-html-head-extra}
-@item @code{:html-inline-images}    @tab @code{org-html-inline-images}
-@item @code{:html-extension}        @tab @code{org-html-extension}
-@item @code{:html-preamble}         @tab @code{org-html-preamble}
-@item @code{:html-postamble}        @tab @code{org-html-postamble}
-@item @code{:html-table-attributes} @tab @code{org-html-table-default-attributes}
-@item @code{:html-table-row-tags}   @tab @code{org-html-table-row-tags}
-@item @code{:html-head-include-default-style} @tab @code{org-html-head-include-default-style}
-@item @code{:html-head-include-scripts} @tab @code{org-html-head-include-scripts}
+@subsubheading ASCII specific properties
+
+@multitable {@code{:ascii-table-keep-all-vertical-lines}} {@code{org-ascii-table-keep-all-vertical-lines}}
+@item @code{:ascii-bullets}                       @tab @code{org-ascii-bullets}
+@item @code{:ascii-caption-above}                 @tab @code{org-ascii-caption-above}
+@item @code{:ascii-charset}                       @tab @code{org-ascii-charset}
+@item @code{:ascii-global-margin}                 @tab @code{org-ascii-global-margin}
+@item @code{:ascii-format-drawer-function}        @tab @code{org-ascii-format-drawer-function}
+@item @code{:ascii-format-inlinetask-function}    @tab @code{org-ascii-format-inlinetask-function}
+@item @code{:ascii-headline-spacing}              @tab @code{org-ascii-headline-spacing}
+@item @code{:ascii-indented-line-width}           @tab @code{org-ascii-indented-line-width}
+@item @code{:ascii-inlinetask-width}              @tab @code{org-ascii-inlinetask-width}
+@item @code{:ascii-inner-margin}                  @tab @code{org-ascii-inner-margin}
+@item @code{:ascii-links-to-notes}                @tab @code{org-ascii-links-to-notes}
+@item @code{:ascii-paragraph-spacing}             @tab @code{org-ascii-paragraph-spacing}
+@item @code{:ascii-quote-margin}                  @tab @code{org-ascii-quote-margin}
+@item @code{:ascii-table-keep-all-vertical-lines} @tab @code{org-ascii-table-keep-all-vertical-lines}
+@item @code{:ascii-table-use-ascii-art}           @tab @code{org-ascii-table-use-ascii-art}
+@item @code{:ascii-table-widen-columns}           @tab @code{org-ascii-table-widen-columns}
+@item @code{:ascii-text-width}                    @tab @code{org-ascii-text-width}
+@item @code{:ascii-underline}                     @tab @code{org-ascii-underline}
+@item @code{:ascii-verbatim-format}               @tab @code{org-ascii-verbatim-format}
 @end multitable
 
-Most of the @code{org-export-with-*} variables have the same effect in each
-exporter.
+@subsubheading Beamer specific properties
 
-@vindex org-publish-project-alist
-When a property is given a value in @code{org-publish-project-alist}, its
-setting overrides the value of the corresponding user variable (if any)
-during publishing.  Options set within a file (@pxref{Export settings}),
-however, override everything.
+@multitable {@code{:beamer-frame-default-options}} {@code{org-beamer-frame-default-options}}
+@item @code{:beamer-theme}                 @tab @code{org-beamer-theme}
+@item @code{:beamer-column-view-format}    @tab @code{org-beamer-column-view-format}
+@item @code{:beamer-environments-extra}    @tab @code{org-beamer-environments-extra}
+@item @code{:beamer-frame-default-options} @tab @code{org-beamer-frame-default-options}
+@item @code{:beamer-outline-frame-options} @tab @code{org-beamer-outline-frame-options}
+@item @code{:beamer-outline-frame-title}   @tab @code{org-beamer-outline-frame-title}
+@end multitable
+
+@subsubheading HTML specific properties
+
+@multitable {@code{:html-table-use-header-tags-for-first-column}} {@code{org-html-table-use-header-tags-for-first-column}}
+@item @code{:html-allow-name-attribute-in-anchors} @tab @code{org-html-allow-name-attribute-in-anchors}
+@item @code{:html-coding-system}              @tab @code{org-html-coding-system}
+@item @code{:html-container}                  @tab @code{org-html-container-element}
+@item @code{:html-divs}                       @tab @code{org-html-divs}
+@item @code{:html-doctype}                    @tab @code{org-html-doctype}
+@item @code{:html-extension}                  @tab @code{org-html-extension}
+@item @code{:html-footnote-format}            @tab @code{org-html-footnote-format}
+@item @code{:html-footnote-separator}         @tab @code{org-html-footnote-separator}
+@item @code{:html-footnotes-section}          @tab @code{org-html-footnotes-section}
+@item @code{:html-format-drawer-function}     @tab @code{org-html-format-drawer-function}
+@item @code{:html-format-headline-function}   @tab @code{org-html-format-headline-function}
+@item @code{:html-format-inlinetask-function} @tab @code{org-html-format-inlinetask-function}
+@item @code{:html-head-extra}                 @tab @code{org-html-head-extra}
+@item @code{:html-head-include-default-style} @tab @code{org-html-head-include-default-style}
+@item @code{:html-head-include-scripts}       @tab @code{org-html-head-include-scripts}
+@item @code{:html-head}                       @tab @code{org-html-head}
+@item @code{:html-home/up-format}             @tab @code{org-html-home/up-format}
+@item @code{:html-html5-fancy}                @tab @code{org-html-html5-fancy}
+@item @code{:html-htmlize-font-prefix}        @tab @code{org-html-htmlize-font-prefix}
+@item @code{:html-htmlize-output-type}        @tab @code{org-html-htmlize-output-type}
+@item @code{:html-indent}                     @tab @code{org-html-indent}
+@item @code{:html-infojs-options}             @tab @code{org-html-infojs-options}
+@item @code{:html-infojs-template}            @tab @code{org-html-infojs-template}
+@item @code{:html-inline-image-rules}         @tab @code{org-html-inline-image-rules}
+@item @code{:html-inline-images}              @tab @code{org-html-inline-images}
+@item @code{:html-link-home}                  @tab @code{org-html-link-home}
+@item @code{:html-link-org-as-html}           @tab @code{org-html-link-org-files-as-html}
+@item @code{:html-link-up}                    @tab @code{org-html-link-up}
+@item @code{:html-link-use-abs-url}           @tab @code{org-html-link-use-abs-url}
+@item @code{:html-mathjax-options}            @tab @code{org-html-mathjax-options}
+@item @code{:html-mathjax-template}           @tab @code{org-html-mathjax-template}
+@item @code{:html-metadata-timestamp-format}  @tab @code{org-html-metadata-timestamp-format}
+@item @code{:html-postamble-format}           @tab @code{org-html-postamble-format}
+@item @code{:html-postamble}                  @tab @code{org-html-postamble}
+@item @code{:html-preamble-format}            @tab @code{org-html-preamble-format}
+@item @code{:html-preamble}                   @tab @code{org-html-preamble}
+@item @code{:html-protect-char-alist}         @tab @code{org-html-protect-char-alist}
+@item @code{:html-table-align-individual-fields} @tab @code{org-html-table-align-individual-fields}
+@item @code{:html-table-attributes}           @tab @code{org-html-table-default-attributes}
+@item @code{:html-table-caption-above}        @tab @code{org-html-table-caption-above}
+@item @code{:html-table-data-tags}            @tab @code{org-html-table-data-tags}
+@item @code{:html-table-header-tags}          @tab @code{org-html-table-header-tags}
+@item @code{:html-table-row-tags}             @tab @code{org-html-table-row-tags}
+@item @code{:html-table-use-header-tags-for-first-column} @tab @code{org-html-table-use-header-tags-for-first-column}
+@item @code{:html-tag-class-prefix}           @tab @code{org-html-tag-class-prefix}
+@item @code{:html-text-markup-alist}          @tab @code{org-html-text-markup-alist}
+@item @code{:html-todo-kwd-class-prefix}      @tab @code{org-html-todo-kwd-class-prefix}
+@item @code{:html-toplevel-hlevel}            @tab @code{org-html-toplevel-hlevel}
+@item @code{:html-use-infojs}                 @tab @code{org-html-use-infojs}
+@item @code{:html-use-unicode-chars}          @tab @code{org-html-use-unicode-chars}
+@item @code{:html-validation-link}            @tab @code{org-html-validation-link}
+@item @code{:html-xml-declaration}            @tab @code{org-html-xml-declaration}
+@end multitable
+
+@subsubheading @LaTeX{} specific properties
+
+@multitable {@code{:latex-link-with-unknown-path-format}} {@code{org-latex-link-with-unknown-path-format}} 
+@item @code{:latex-active-timestamp-format}    @tab @code{org-latex-active-timestamp-format}
+@item @code{:latex-classes}                    @tab @code{org-latex-classes}
+@item @code{:latex-class}                      @tab @code{org-latex-default-class}
+@item @code{:latex-default-figure-position}    @tab @code{org-latex-default-figure-position}
+@item @code{:latex-default-table-environment}  @tab @code{org-latex-default-table-environment}
+@item @code{:latex-default-table-mode}         @tab @code{org-latex-default-table-mode}
+@item @code{:latex-diary-timestamp-format}     @tab @code{org-latex-diary-timestamp-format}
+@item @code{:latex-footnote-separator}         @tab @code{org-latex-footnote-separator}
+@item @code{:latex-format-drawer-function}     @tab @code{org-latex-format-drawer-function}
+@item @code{:latex-format-headline-function}   @tab @code{org-latex-format-headline-function}
+@item @code{:latex-format-inlinetask-function} @tab @code{org-latex-format-inlinetask-function}
+@item @code{:latex-hyperref-template}          @tab @code{org-latex-hyperref-template}
+@item @code{:latex-image-default-height}       @tab @code{org-latex-image-default-height}
+@item @code{:latex-image-default-option}       @tab @code{org-latex-image-default-option}
+@item @code{:latex-image-default-width}        @tab @code{org-latex-image-default-width}
+@item @code{:latex-inactive-timestamp-format}  @tab @code{org-latex-inactive-timestamp-format}
+@item @code{:latex-inline-image-rules}         @tab @code{org-latex-inline-image-rules}
+@item @code{:latex-inputenc-alist}             @tab @code{org-latex-inputenc-alist}
+@item @code{:latex-known-warnings}             @tab @code{org-latex-known-warnings}
+@item @code{:latex-link-with-unknown-path-format} @tab @code{org-latex-link-with-unknown-path-format}
+@item @code{:latex-listings-langs}             @tab @code{org-latex-listings-langs}
+@item @code{:latex-listings-options}           @tab @code{org-latex-listings-options}
+@item @code{:latex-listings}                   @tab @code{org-latex-listings}
+@item @code{:latex-logfiles-extensions}        @tab @code{org-latex-logfiles-extensions}
+@item @code{:latex-minted-langs}               @tab @code{org-latex-minted-langs}
+@item @code{:latex-minted-options}             @tab @code{org-latex-minted-options}
+@item @code{:latex-pdf-process}                @tab @code{org-latex-pdf-process}
+@item @code{:latex-remove-logfiles}            @tab @code{org-latex-remove-logfiles}
+@item @code{:latex-table-caption-above}        @tab @code{org-latex-table-caption-above}
+@item @code{:latex-table-scientific-notation}  @tab @code{org-latex-table-scientific-notation}
+@item @code{:latex-tables-booktabs}            @tab @code{org-latex-tables-booktabs}
+@item @code{:latex-tables-centered}            @tab @code{org-latex-tables-centered}
+@item @code{:latex-text-markup-alist}          @tab @code{org-latex-text-markup-alist}
+@item @code{:latex-title-command}              @tab @code{org-latex-title-command}
+@item @code{:latex-toc-command}                @tab @code{org-latex-toc-command}
+@end multitable
+
+@subsubheading Markdown specific properties
+
+@multitable {@code{:md-headline-style}} {@code{org-md-headline-style}}
+@item @code{:md-headline-style} @tab @code{org-md-headline-style}
+@end multitable
+
+@subsubheading ODT specific properties
+
+@multitable {@code{:odt-create-custom-styles-for-srcblocks}} {@code{org-odt-create-custom-styles-for-srcblocks}}
+@item @code{:odt-convert-capabilities}       @tab @code{org-odt-convert-capabilities}
+@item @code{:odt-convert-processes}          @tab @code{org-odt-convert-processes}
+@item @code{:odt-convert-process}            @tab @code{org-odt-convert-process}
+@item @code{:odt-create-custom-styles-for-srcblocks} @tab @code{org-odt-create-custom-styles-for-srcblocks}
+@item @code{:odt-display-outline-level}      @tab @code{org-odt-display-outline-level}
+@item @code{:odt-fontify-srcblocks}          @tab @code{org-odt-fontify-srcblocks}
+@item @code{:odt-format-drawer-function}     @tab @code{org-odt-format-drawer-function}
+@item @code{:odt-format-headline-function}   @tab @code{org-odt-format-headline-function}
+@item @code{:odt-format-inlinetask-function} @tab @code{org-odt-format-inlinetask-function}
+@item @code{:odt-inline-formula-rules}       @tab @code{org-odt-inline-formula-rules}
+@item @code{:odt-inline-image-rules}         @tab @code{org-odt-inline-image-rules}
+@item @code{:odt-pixels-per-inch}            @tab @code{org-odt-pixels-per-inch}
+@item @code{:odt-preferred-output-format}    @tab @code{org-odt-preferred-output-format}
+@item @code{:odt-prettify-xml}               @tab @code{org-odt-prettify-xml}
+@item @code{:odt-schema-dir}                 @tab @code{org-odt-schema-dir}
+@item @code{:odt-styles-file}                @tab @code{org-odt-content-template-file}
+@item @code{:odt-styles-file}                @tab @code{org-odt-styles-file}
+@item @code{:odt-table-styles}               @tab @code{org-odt-table-styles}
+@item @code{:odt-use-date-fields}            @tab @code{org-odt-use-date-fields}
+@end multitable
+
+@subsubheading Org specific properties
+
+@multitable {@code{:org-htmlized-css-url}} {@code{org-org-htmlized-css-url}}
+@item @code{:org-htmlized-css-url} @tab @code{org-org-htmlized-css-url}
+@end multitable
+
+@subsubheading Texinfo specific properties
+
+@multitable {@code{:texinfo-link-with-unknown-path-format}} {@code{org-texinfo-link-with-unknown-path-format}}
+@item @code{:texinfo-active-timestamp-format}    @tab @code{org-texinfo-active-timestamp-format}
+@item @code{:texinfo-classes}                    @tab @code{org-texinfo-classes}
+@item @code{:texinfo-class}                      @tab @code{org-texinfo-default-class}
+@item @code{:texinfo-coding-system}              @tab @code{org-texinfo-coding-system}
+@item @code{:texinfo-def-table-markup}           @tab @code{org-texinfo-def-table-markup}
+@item @code{:texinfo-diary-timestamp-format}     @tab @code{org-texinfo-diary-timestamp-format}
+@item @code{:texinfo-filename}                   @tab @code{org-texinfo-filename}
+@item @code{:texinfo-format-drawer-function}     @tab @code{org-texinfo-format-drawer-function}
+@item @code{:texinfo-format-headline-function}   @tab @code{org-texinfo-format-headline-function}
+@item @code{:texinfo-format-inlinetask-function} @tab @code{org-texinfo-format-inlinetask-function}
+@item @code{:texinfo-inactive-timestamp-format}  @tab @code{org-texinfo-inactive-timestamp-format}
+@item @code{:texinfo-info-process}               @tab @code{org-texinfo-info-process}
+@item @code{:texinfo-link-with-unknown-path-format} @tab @code{org-texinfo-link-with-unknown-path-format}
+@item @code{:texinfo-logfiles-extensions}        @tab @code{org-texinfo-logfiles-extensions}
+@item @code{:texinfo-node-description-column}    @tab @code{org-texinfo-node-description-column}
+@item @code{:texinfo-remove-logfiles}            @tab @code{org-texinfo-remove-logfiles}
+@item @code{:texinfo-table-scientific-notation}  @tab @code{org-texinfo-table-scientific-notation}
+@item @code{:texinfo-tables-verbatim}            @tab @code{org-texinfo-tables-verbatim}
+@item @code{:texinfo-text-markup-alist}          @tab @code{org-texinfo-text-markup-alist}
+@end multitable
 
 @node Publishing links
 @subsection Links between published files
@@ -13801,8 +14027,14 @@ can be used to map arbitrary language names to existing major modes.
 @item org-src-window-setup
 Controls the way Emacs windows are rearranged when the edit buffer is created.
 @item org-src-preserve-indentation
-This variable is especially useful for tangling languages such as
-Python, in which whitespace indentation in the output is critical.
+@cindex indentation, in source blocks
+By default, the value is @code{nil}, which means that when code blocks are
+evaluated during export or tangled, they are re-inserted into the code block,
+which may replace sequences of spaces with tab characters.  When non-nil,
+whitespace in code blocks will be preserved during export or tangling,
+exactly as it appears.  This variable is especially useful for tangling
+languages such as Python, in which whitespace indentation in the output is
+critical.
 @item org-src-ask-before-returning-to-edit-buffer
 By default, Org will ask before returning to an open edit buffer.  Set this
 variable to @code{nil} to switch without asking.
@@ -13825,7 +14057,8 @@ results of code block evaluation.  For information on exporting code block
 bodies, see @ref{Literal examples}.
 
 The @code{:exports} header argument can be used to specify export
-behavior:
+behavior (note that these arguments are only relevant for code blocks, not
+inline code):
 
 @subsubheading Header arguments:
 
@@ -13852,12 +14085,15 @@ ensure that no code blocks are evaluated as part of the export process.  This
 can be useful in situations where potentially untrusted Org mode files are
 exported in an automated fashion, for example when Org mode is used as the
 markup language for a wiki.  It is also possible to set this variable to
-@code{'inline-only}.  In that case, only inline code blocks will be
+@code{inline-only}.  In that case, only inline code blocks will be
 evaluated, in order to insert their results.  Non-inline code blocks are
 assumed to have their results already inserted in the buffer by manual
 evaluation.  This setting is useful to avoid expensive recalculations during
 export, not to provide security.
 
+Code blocks in commented subtrees (@pxref{Comment lines}) are never evaluated
+on export.  However, code blocks in subtrees excluded from export
+(@pxref{Export settings}) may be evaluated on export.
 
 @node Extracting source code
 @section Extracting source code
@@ -13954,10 +14190,13 @@ its results into the Org mode buffer.
 @cindex #+CALL
 
 It is also possible to evaluate named code blocks from anywhere in an Org
-mode buffer or an Org mode table.  Live code blocks located in the current
-Org mode buffer or in the ``Library of Babel'' (see @ref{Library of Babel})
-can be executed.  Named code blocks can be executed with a separate
-@code{#+CALL:} line or inline within a block of text.
+mode buffer or an Org mode table.  These named code blocks can be located in
+the current Org mode buffer or in the ``Library of Babel'' (see @ref{Library
+of Babel}).  Named code blocks can be evaluated with a separate
+@code{#+CALL:} line or inline within a block of text. In both cases
+the result is wrapped according to the value of
+@var{org-babel-inline-result-wrap}, which by default is @code{"=%s="} for
+markup that produces verbatim text.
 
 The syntax of the @code{#+CALL:} line is
 
@@ -14317,6 +14556,8 @@ argument in lowercase letters.  The following header arguments are defined:
                                 be collected and handled
 * file::                        Specify a path for file output
 * file-desc::                   Specify a description for file results
+* file-ext::                    Specify an extension for file output
+* output-dir::                  Specify a directory to write file output to
 * dir::                         Specify the default (possibly remote)
                                 directory for code block execution
 * exports::                     Export code and/or results
@@ -14751,6 +14992,29 @@ description for file code block results which are inserted as Org mode links
 with no value the link path will be placed in both the ``link'' and the
 ``description'' portion of the Org mode link.
 
+@node file-ext
+@subsubsection @code{:file-ext}
+@cindex @code{:file-ext}, src header argument
+
+The value of the @code{:file-ext} header argument is used to provide an
+extension to write the file output to.  It is combined with the
+@code{#+NAME:} of the source block and the value of the @ref{output-dir}
+header argument to generate a complete file name.
+
+This header arg will be overridden by @code{:file}, and thus has no effect
+when the latter is specified.
+
+@node output-dir
+@subsubsection @code{:output-dir}
+@cindex @code{:output-dir}, src header argument
+
+The value of the @code{:output-dir} header argument is used to provide a
+directory to write the file output to.  It may specify an absolute directory
+(beginning with @code{/}) or a relative directory (without @code{/}).  It can
+be combined with the @code{#+NAME:} of the source block and the value of the
+@ref{file-ext} header argument to generate a complete file name, or used
+along with a @ref{file} header arg.
+
 @node dir
 @subsubsection @code{:dir} and remote execution
 @cindex @code{:dir}, src header argument
@@ -14825,7 +15089,8 @@ which the link does not point.
 @cindex @code{:exports}, src header argument
 
 The @code{:exports} header argument specifies what should be included in HTML
-or @LaTeX{} exports of the Org mode file.
+or @LaTeX{} exports of the Org mode file.  Note that the @code{:exports}
+option is only relevant for code blocks, not inline code.
 
 @itemize @bullet
 @item @code{code}
@@ -14921,6 +15186,9 @@ during tangling.  This has the effect of assigning values to variables
 specified with @code{:var} (see @ref{var}), and of replacing ``noweb''
 references (see @ref{Noweb reference syntax}) with their targets.  The
 @code{:no-expand} header argument can be used to turn off this behavior.
+Note: The @code{:no-expand} header argument has no impact on export,
+i.e. code blocks will irrespective of this header argument expanded for
+execution.
 
 @node session
 @subsubsection @code{:session}
@@ -14996,12 +15264,12 @@ references.
 @node noweb-ref
 @subsubsection @code{:noweb-ref}
 @cindex @code{:noweb-ref}, src header argument
-When expanding ``noweb'' style references the bodies of all code block with
+When expanding ``noweb'' style references, the bodies of all code block with
 @emph{either} a block name matching the reference name @emph{or} a
 @code{:noweb-ref} header argument matching the reference name will be
 concatenated together to form the replacement text.
 
-By setting this header argument at the sub-tree or file level, simple code
+By setting this header argument at the subtree or file level, simple code
 block concatenation may be achieved.  For example, when tangling the
 following Org mode file, the bodies of code blocks will be concatenated into
 the resulting pure code file@footnote{(The example needs property inheritance
@@ -15888,7 +16156,7 @@ The corresponding variable is @code{org-archive-location}.
 This line sets the category for the agenda file.  The category applies
 for all subsequent lines until the next @samp{#+CATEGORY} line, or the
 end of the file.  The first such line also applies to any entries before it.
-@item #+COLUMNS: %25ITEM .....
+@item #+COLUMNS: %25ITEM ...
 @cindex property, COLUMNS
 Set the default format for columns view.  This format applies when
 columns view is invoked in locations where no @code{COLUMNS} property
@@ -15903,7 +16171,7 @@ The global version of this variable is
 @item #+FILETAGS: :tag1:tag2:tag3:
 Set tags that can be inherited by any entry in the file, including the
 top-level entries.
-@item #+LINK:  linkword replace
+@item #+LINK: linkword replace
 @vindex org-link-abbrev-alist
 These lines (several are allowed) specify link abbreviations.
 @xref{Link abbreviations}.  The corresponding variable is
@@ -16919,7 +17187,7 @@ Orgtbl mode how to translate this table and where to install it.  For
 example:
 @cindex #+ORGTBL
 @example
-#+ORGTBL: SEND table_name translation_function arguments....
+#+ORGTBL: SEND table_name translation_function arguments...
 @end example
 
 @noindent
